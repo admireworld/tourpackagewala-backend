@@ -7,9 +7,16 @@
  * What it does
  * ------------
  * - Once a day, auto-writes a travel blog post (title + article + a
- *   matching image) using a FREE AI provider (Pollinations.ai — no
- *   API key, no cost). Generation is "lazy": the first visitor of the
- *   day triggers it, so it works fine even on free hosting that sleeps.
+ *   matching cover image). Generation is "lazy": the first visitor of the
+ *   day triggers it, so it works fine even on free hosting that sleeps —
+ *   PLUS a background check every 30 minutes (see the bottom of this
+ *   file) that writes today's post even if nobody visits, as long as the
+ *   server process is awake.
+ * - The cover image is a real travel photo from Pexels by default (falls
+ *   back to a free AI-generated image if Pexels isn't configured or a
+ *   search fails) — the search query is always scoped to travel/tourism,
+ *   and the article prompt itself is instructed to stay strictly on
+ *   travel/tourism topics, since this is a travel agency's blog.
  * - Admin can set tomorrow's topic ahead of time via POST /api/blog/set-topic.
  *   If nothing is set, the server picks the next topic itself from a
  *   rotating travel-topic list.
@@ -17,10 +24,11 @@
  *   survive server restarts as long as the disk isn't wiped. For a
  *   real production deploy with guaranteed persistence, swap the two
  *   read/save functions at the bottom for a database call.
- * - Provider is swappable: today it's free (Pollinations). Later, if
- *   you buy an OpenAI/other key, just set AI_TEXT_PROVIDER=openai and
- *   AI_IMAGE_PROVIDER=openai (+ OPENAI_API_KEY) in env vars — no code
- *   change needed, see generateText()/generateImageUrl() below.
+ * - Provider is swappable at any time from the Admin Dashboard
+ *   (Settings → "AI Content Provider") — Pollinations (free), Gemini,
+ *   or OpenAI, with the API key stored on the server and editable from
+ *   there. No code change or redeploy needed to switch provider or
+ *   rotate a key — see ai-provider.js / ai-settings.js.
  * - KEYWORD RESEARCH (new): before writing, the topic is expanded into
  *   the actual long-tail phrases people type into Google for it, using
  *   Google's own free autocomplete suggestion API (no key, no signup —
@@ -31,17 +39,16 @@
  *   each post (extra fields only — nothing existing is removed), ready
  *   for whenever individual blog post pages are built on the frontend.
  *
- * Env vars used (all optional):
+ * Env vars used (all optional — see ai-provider.js for the AI provider/key,
+ * which is normally managed from the Admin Dashboard instead):
  *   ADMIN_KEY            -> secret to protect the "set topic" endpoint
- *   AI_TEXT_PROVIDER      -> "pollinations" (default) | "openai"
- *   AI_IMAGE_PROVIDER     -> "pollinations" (default) | "openai"
- *   OPENAI_API_KEY         -> only needed if a provider above is "openai"
  */
 
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+const { generateText, generateImageUrl } = require("./ai-provider");
 
 const router = express.Router();
 
@@ -201,50 +208,16 @@ function buildMetaDescription(content, topic) {
   return cut.slice(0, cut.lastIndexOf(" ")) + "…";
 }
 
-/* ---------- AI providers ---------- */
-// Free by default: Pollinations.ai needs no signup and no API key.
-async function generateText(prompt) {
-  const provider = process.env.AI_TEXT_PROVIDER || "pollinations";
-
-  if (provider === "openai") {
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const data = await resp.json();
-    return data.choices?.[0]?.message?.content?.trim() || "";
-  }
-
-  // Default: Pollinations free text API (GET, plain text response)
-  const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
-  const resp = await fetch(url);
-  const text = await resp.text();
-  return text.trim();
-}
-
-// Returns an image URL — Pollinations generates the image on the fly
-// when this URL is opened, so nothing needs to be downloaded or stored.
-function generateImageUrl(prompt) {
-  const provider = process.env.AI_IMAGE_PROVIDER || "pollinations";
-
-  if (provider === "openai") {
-    // Placeholder: with a paid key you'd call the OpenAI images endpoint
-    // here, upload the result somewhere, and return that URL instead.
-    // Left as a hook for when a paid plan is added.
-  }
-
-  const seed = Date.now();
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    prompt + ", travel photography, vibrant, high quality"
-  )}?width=1024&height=576&seed=${seed}&nologo=true`;
-}
+/* ---------- AI provider ----------
+ * generateText()/generateImageUrl() now live in ai-provider.js and are
+ * shared with packages.js. The active provider + API key are stored in
+ * ai-settings-data.json and editable any time from the Admin Dashboard
+ * (Settings → "AI Content Provider") — no code change or redeploy
+ * needed to switch provider or rotate a key. If the selected provider
+ * ever fails (bad/expired key, quota, etc.), ai-provider.js
+ * automatically falls back to the free Pollinations provider so the
+ * daily blog is never blocked.
+ */
 
 /* ---------- Core: generate today's post if it doesn't exist yet ---------- */
 async function ensureTodaysPost() {
@@ -279,6 +252,9 @@ async function ensureTodaysPost() {
     `AdmireDworld Travel, about: "${topic}". Give it a catchy title on the first ` +
     `line, then 4-6 short paragraphs. Friendly, practical tone, no markdown symbols. ` +
     `Ground the post in specific, accurate details rather than vague generalities. ` +
+    `Stay strictly on travel and tourism — destinations, itineraries, packing, ` +
+    `visas, budgets, food, culture, best time to visit, etc. — and never drift into ` +
+    `any unrelated subject, since this is a travel agency's blog. ` +
     `End the last paragraph with one natural, non-pushy line inviting the reader to ` +
     `get a free custom itinerary from AdmireDworld Travel for this kind of trip — ` +
     `written as genuine advice, not an ad slogan.` +
@@ -311,7 +287,9 @@ async function ensureTodaysPost() {
     topic,
     title,
     content,
-    imageUrl: generateImageUrl(topic),
+    imageUrl: await generateImageUrl(topic), // FIX: was missing "await" — imageUrl was being saved
+    // as an unresolved Promise object (serializes to "{}" in JSON), so the
+    // frontend never got a real image URL for the blog cover photo.
     researchSourceUrl: research?.sourceUrl || null, // where the grounding facts came from, if any
     // --- SEO fields (new, additive) — used by generate-blog-pages.js to
     // give each post its own real, crawlable page at /blog/<slug>.html. ---
@@ -402,3 +380,25 @@ router.post("/set-topic", setTopicLimiter, (req, res) => {
 
 module.exports = router;
 module.exports.loadData = loadData; // used by generate-blog-pages.js to build static /blog/<slug>.html pages
+
+/* ---------- Keep the blog reliably daily, even on a quiet day ----------
+ * Before this, ensureTodaysPost() only ran when a visitor actually opened
+ * the blog tab (GET /api/blog/latest) — so on a day with zero visitors,
+ * no post got written at all. As long as this server process is awake,
+ * this checks every 30 minutes and writes today's post the moment it's
+ * missing, so the blog publishes daily regardless of traffic. This is a
+ * belt-and-braces addition on top of the existing visitor-triggered path,
+ * not a replacement — the very first visitor of the day still gets an
+ * instant post exactly as before, and this doesn't help on a free host
+ * that's fully asleep (nothing runs at all while asleep), only once the
+ * process is running.
+ */
+setInterval(() => {
+  ensureTodaysPost().catch((err) => console.error("blog: scheduled generation failed:", err.message));
+}, 30 * 60 * 1000).unref();
+
+// Also try once shortly after every server start/restart, in case it
+// happens mid-day and no visitor has hit the blog tab yet.
+setTimeout(() => {
+  ensureTodaysPost().catch((err) => console.error("blog: startup generation failed:", err.message));
+}, 15 * 1000).unref();

@@ -50,6 +50,7 @@ const VALID_SOURCES = new Set([
   "newsletter",
   "whatsapp_click",
   "sticky_bar",
+  "package_enquiry", // "Book Now" query form on a package's own detail page
   "other",
 ]);
 const VALID_STATUSES = new Set(["new", "contacted", "converted", "closed"]);

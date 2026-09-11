@@ -25,7 +25,8 @@
  *
  * Env vars used:
  *   ADMIN_KEY  -> same secret as blog.js, protects add/edit/delete
- *   AI_TEXT_PROVIDER / AI_IMAGE_PROVIDER / OPENAI_API_KEY -> same as blog.js
+ *   (AI provider/key is shared with blog.js via ai-provider.js, and is
+ *   normally managed from the Admin Dashboard instead of env vars)
  *
  * Endpoints
  * ---------
@@ -40,18 +41,83 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+const { generateText, generateImageUrl } = require("./ai-provider");
 
 const router = express.Router();
 
 const DATA_FILE = path.join(__dirname, "packages-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 
+/* ---------- SEO-friendly slug helper ----------
+ * Builds each package's crawlable URL slug, e.g.
+ * "coorg-and-chikmagalur-karnataka-coffee-estate-escape".
+ *
+ * NOW PERSISTED (additive — nothing above/below this block changes):
+ * every package gets a `slug` field saved to its JSON file the first
+ * time it's loaded after this update, and every NEW package (manual,
+ * AI auto-add) gets its slug assigned at creation time. Once a slug is
+ * saved it stays stable even if the package is later renamed — that's
+ * what makes it safe to use as a permanent public URL / share link.
+ * Uniqueness is guaranteed *within* each file (india / international)
+ * by appending "-2", "-3", etc. on a collision.
+ */
+function slugify(str) {
+  return String(str || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "package";
+}
+
+// Makes sure every package in the array has a stable, unique `slug`.
+// Mutates the array in place (fills in `p.slug` where missing/duplicate)
+// and returns true if anything changed, so the caller knows whether the
+// file needs to be re-saved.
+function ensureSlugs(pkgs) {
+  const used = new Set();
+  let changed = false;
+  for (const p of pkgs) {
+    const base = slugify(p.name);
+    let slug = typeof p.slug === "string" && p.slug ? p.slug : null;
+    if (!slug || used.has(slug)) {
+      let candidate = slug && !used.has(slug) ? slug : base;
+      let n = 2;
+      while (used.has(candidate)) candidate = `${base}-${n++}`;
+      if (candidate !== p.slug) {
+        p.slug = candidate;
+        changed = true;
+      }
+      slug = candidate;
+    }
+    used.add(slug);
+  }
+  return changed;
+}
+
+// Picks a fresh, unique slug for a brand-new package being created right
+// now (admin add / weekly AI auto-add), given the packages already in
+// that file.
+function nextUniqueSlug(name, existingPkgs) {
+  const used = new Set((existingPkgs || []).map((p) => p.slug).filter(Boolean));
+  const base = slugify(name);
+  let slug = base;
+  let n = 2;
+  while (used.has(slug)) slug = `${base}-${n++}`;
+  return slug;
+}
+
+function withSlug(p) {
+  if (!p) return p;
+  return p.slug ? p : { ...p, slug: slugify(p.name) };
+}
+
 /* ---------- Seed data (same 6 packages the frontend already had) ---------- */
 const SEED_PACKAGES = [
   { id: "in1", destination: "Srinagar, Gulmarg, Pahalgam", name: "Kashmir Valley Escape",
     loc: "Srinagar · Gulmarg · Pahalgam", tag: "6D/5N", cat: "hills",
     desc: "Shikara stays, snow-capped meadows and Mughal gardens.",
-    hotelCategory: "4-star", price: 24999, discountPrice: 22999,
+    hotelCategory: "4-star", hotelName: "The Khyber Himalayan Resort & Spa (or similar)", price: 24999, discountPrice: 22999,
     dayWise: [
       { day: 1, title: "Arrival in Srinagar", desc: "Check-in, evening Shikara ride on Dal Lake." },
       { day: 2, title: "Gulmarg excursion", desc: "Gondola ride, meadow views, return to Srinagar." },
@@ -67,7 +133,7 @@ const SEED_PACKAGES = [
   { id: "in2", destination: "Alleppey, Kumarakom, Munnar", name: "Kerala Backwaters",
     loc: "Alleppey · Kumarakom · Munnar", tag: "5D/4N", cat: "offbeat",
     desc: "Houseboat nights and tea garden mornings.",
-    hotelCategory: "4-star", price: 21999, discountPrice: 19999,
+    hotelCategory: "4-star", hotelName: "Backwater Ripples / Lake Resort (or similar)", price: 21999, discountPrice: 19999,
     dayWise: [
       { day: 1, title: "Arrival, transfer to Alleppey", desc: "Check-in to houseboat, backwater cruise." },
       { day: 2, title: "Kumarakom", desc: "Bird sanctuary, lake resort stay." },
@@ -82,7 +148,7 @@ const SEED_PACKAGES = [
   { id: "in3", destination: "Jaipur, Udaipur, Jodhpur", name: "Royal Rajasthan",
     loc: "Jaipur · Udaipur · Jodhpur", tag: "7D/6N", cat: "heritage",
     desc: "A combo of forts, havelis and desert sunsets.",
-    hotelCategory: "4-star heritage", price: 28999, discountPrice: 26499,
+    hotelCategory: "4-star heritage", hotelName: "Heritage Haveli Group Hotel (or similar)", price: 28999, discountPrice: 26499,
     dayWise: [
       { day: 1, title: "Arrival in Jaipur", desc: "Check-in, evening at Johari Bazaar." },
       { day: 2, title: "Jaipur sightseeing", desc: "Amber Fort, City Palace, Hawa Mahal." },
@@ -99,7 +165,7 @@ const SEED_PACKAGES = [
   { id: "in4", destination: "North & South Goa", name: "Goa Beach Break",
     loc: "North & South Goa", tag: "4D/3N", cat: "beach",
     desc: "Beach shacks, water sports and laid-back vibes.",
-    hotelCategory: "3-star", price: 15999, discountPrice: 13999,
+    hotelCategory: "3-star", hotelName: "Local Partner Hotel (or similar)", price: 15999, discountPrice: 13999,
     dayWise: [
       { day: 1, title: "Arrival, North Goa", desc: "Check-in, Baga & Calangute beach visit." },
       { day: 2, title: "Water sports & Fort Aguada", desc: "Optional water sports, Fort Aguada visit." },
@@ -113,7 +179,7 @@ const SEED_PACKAGES = [
   { id: "in5", destination: "Manali, Shimla, Kasol", name: "Himachal Hills",
     loc: "Manali · Shimla · Kasol", tag: "6D/5N", cat: "hills",
     desc: "Pine forests, river valleys and mountain cafes.",
-    hotelCategory: "3-star", price: 19999, discountPrice: 17999,
+    hotelCategory: "3-star", hotelName: "Local Partner Hotel (or similar)", price: 19999, discountPrice: 17999,
     dayWise: [
       { day: 1, title: "Arrival in Manali", desc: "Check-in, Mall Road evening." },
       { day: 2, title: "Solang Valley", desc: "Snow point / adventure activities." },
@@ -129,7 +195,7 @@ const SEED_PACKAGES = [
   { id: "in6", destination: "Shillong, Cherrapunji", name: "Meghalaya Offbeat",
     loc: "Shillong · Cherrapunji", tag: "5D/4N", cat: "offbeat",
     desc: "Living root bridges and waterfall trails.",
-    hotelCategory: "3-star", price: 23999, discountPrice: 21499,
+    hotelCategory: "3-star", hotelName: "Local Partner Hotel (or similar)", price: 23999, discountPrice: 21499,
     dayWise: [
       { day: 1, title: "Arrival in Shillong", desc: "Check-in, Police Bazar evening." },
       { day: 2, title: "Shillong sightseeing", desc: "Elephant Falls, Shillong Peak." },
@@ -158,12 +224,18 @@ const AUTO_DESTINATIONS = [
 
 /* ---------- Storage ---------- */
 function loadData() {
+  let data;
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
-    return JSON.parse(raw);
+    data = JSON.parse(raw);
+    data.packages = data.packages || [];
   } catch {
-    return { packages: SEED_PACKAGES.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
+    data = { packages: SEED_PACKAGES.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
   }
+  // Backfill/repair slugs (new field) and persist once so every future
+  // load already has them — no-op once every package has a stable slug.
+  if (ensureSlugs(data.packages)) saveData(data);
+  return data;
 }
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
@@ -178,28 +250,12 @@ function isoWeekKey(d = new Date()) {
   return `${date.getUTCFullYear()}-W${week}`;
 }
 
-/* ---------- AI helpers (same free provider as blog.js) ---------- */
-async function generateText(prompt) {
-  const provider = process.env.AI_TEXT_PROVIDER || "pollinations";
-  if (provider === "openai") {
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }] }),
-    });
-    const data = await resp.json();
-    return data.choices?.[0]?.message?.content?.trim() || "";
-  }
-  const resp = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`);
-  return (await resp.text()).trim();
-}
-
-function generateImageUrl(prompt) {
-  const seed = Date.now();
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    prompt + ", travel destination photography, vibrant, high quality"
-  )}?width=640&height=420&seed=${seed}&nologo=true`;
-}
+/* ---------- AI helpers ----------
+ * generateText()/generateImageUrl() are shared with blog.js, imported
+ * from ai-provider.js at the top of this file. Provider + API key are
+ * editable any time from the Admin Dashboard (Settings → "AI Content
+ * Provider") — no code change or redeploy needed.
+ */
 
 function pickAutoDestination(data) {
   const dest = AUTO_DESTINATIONS[data.destCursor % AUTO_DESTINATIONS.length];
@@ -221,6 +277,7 @@ async function ensureWeeklyPackage() {
     `Destination: "${destination}". JSON shape: ` +
     `{"name":"short catchy package name","loc":"place1 · place2 · place3","tag":"6D/5N",` +
     `"desc":"one short sentence","hotelCategory":"3-star/4-star/luxury etc",` +
+    `"hotelName":"a plausible hotel/resort name for this destination, add (or similar) at the end",` +
     `"dayWise":[{"day":1,"title":"...","desc":"..."}],` +
     `"inclusions":["...","..."],"exclusions":["...","..."],` +
     `"price":24999,"discountPrice":21999}`;
@@ -241,12 +298,13 @@ async function ensureWeeklyPackage() {
       cat: CATS[data.destCursor % CATS.length],
       desc: parsed.desc || `Explore ${destination}.`,
       hotelCategory: parsed.hotelCategory || "3-star",
+      hotelName: parsed.hotelName || "",
       dayWise: Array.isArray(parsed.dayWise) ? parsed.dayWise : [],
       inclusions: Array.isArray(parsed.inclusions) ? parsed.inclusions : [],
       exclusions: Array.isArray(parsed.exclusions) ? parsed.exclusions : [],
       price: Number(parsed.price) || 24999,
       discountPrice: Number(parsed.discountPrice) || undefined,
-      imageUrl: generateImageUrl(destination),
+      imageUrl: await generateImageUrl(destination),
       source: "ai",
       createdAt: new Date().toISOString(),
     };
@@ -261,17 +319,19 @@ async function ensureWeeklyPackage() {
       cat: CATS[data.destCursor % CATS.length],
       desc: `A fresh itinerary for ${destination}.`,
       hotelCategory: "3-star",
+      hotelName: "",
       dayWise: [{ day: 1, title: "Arrival", desc: "Details being finalized — check back soon." }],
       inclusions: ["Hotel stay", "Breakfast", "Transfers"],
       exclusions: ["Flights", "Personal expenses"],
       price: 24999,
       discountPrice: undefined,
-      imageUrl: generateImageUrl(destination),
+      imageUrl: await generateImageUrl(destination),
       source: "ai",
       createdAt: new Date().toISOString(),
     };
   }
 
+  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   data.lastAutoWeek = week;
   saveData(data);
@@ -293,7 +353,7 @@ const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHead
 router.get("/india", async (req, res) => {
   try {
     const packages = await ensureWeeklyPackage();
-    res.json({ ok: true, packages });
+    res.json({ ok: true, packages: packages.map(withSlug) });
   } catch (err) {
     console.error("packages list error:", err);
     res.status(500).json({ error: "Could not load packages." });
@@ -304,7 +364,7 @@ router.get("/india/:id", (req, res) => {
   const data = loadData();
   const pkg = data.packages.find((p) => p.id === req.params.id);
   if (!pkg) return res.status(404).json({ error: "Package not found." });
-  res.json({ ok: true, package: pkg });
+  res.json({ ok: true, package: withSlug(pkg) });
 });
 
 router.post("/india", adminLimiter, (req, res) => {
@@ -323,6 +383,7 @@ router.post("/india", adminLimiter, (req, res) => {
     cat: body.cat || "offbeat",
     desc: body.desc || "",
     hotelCategory: body.hotelCategory || "3-star",
+    hotelName: (body.hotelName || "").trim(),
     dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
     inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
     exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
@@ -332,9 +393,10 @@ router.post("/india", adminLimiter, (req, res) => {
     source: "admin",
     createdAt: new Date().toISOString(),
   };
+  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   saveData(data);
-  res.json({ ok: true, package: pkg });
+  res.json({ ok: true, package: withSlug(pkg) });
 });
 
 router.put("/india/:id", adminLimiter, (req, res) => {
@@ -344,14 +406,14 @@ router.put("/india/:id", adminLimiter, (req, res) => {
   if (idx === -1) return res.status(404).json({ error: "Package not found." });
   const body = req.body || {};
   const allowed = [
-    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory",
+    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
     "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
   ];
   allowed.forEach((field) => {
     if (body[field] !== undefined) data.packages[idx][field] = body[field];
   });
   saveData(data);
-  res.json({ ok: true, package: data.packages[idx] });
+  res.json({ ok: true, package: withSlug(data.packages[idx]) });
 });
 
 router.delete("/india/:id", adminLimiter, (req, res) => {
@@ -378,7 +440,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it1", destination: "Ubud, Seminyak, Nusa Penida (Bali)", name: "Bali Island Retreat",
     loc: "Ubud · Seminyak · Nusa Penida", tag: "6D/5N", cat: "beach",
     desc: "Rice terraces, beach clubs and temple visits.",
-    hotelCategory: "4-star", price: 54999, discountPrice: 49999,
+    hotelCategory: "4-star", hotelName: "Ubud/Seminyak Resort Collection (or similar)", price: 54999, discountPrice: 49999,
     dayWise: [
       { day: 1, title: "Arrival, Seminyak", desc: "Check-in, beach club evening." },
       { day: 2, title: "Ubud", desc: "Rice terraces, monkey forest, transfer to Ubud." },
@@ -394,7 +456,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it2", destination: "Downtown Dubai, Palm Jumeirah", name: "Dubai City Lights",
     loc: "Downtown · Palm Jumeirah", tag: "5D/4N", cat: "city",
     desc: "Desert safari, skyline views and shopping.",
-    hotelCategory: "4-star", price: 49999, discountPrice: 45999,
+    hotelCategory: "4-star", hotelName: "Downtown Dubai Hotel (or similar)", price: 49999, discountPrice: 45999,
     dayWise: [
       { day: 1, title: "Arrival", desc: "Check-in, Dubai Mall & fountain show." },
       { day: 2, title: "Desert safari", desc: "Dune bashing, BBQ dinner with entertainment." },
@@ -409,7 +471,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it3", destination: "Zurich, Interlaken, Lucerne", name: "Switzerland Alps",
     loc: "Zurich · Interlaken · Lucerne", tag: "7D/6N", cat: "scenic",
     desc: "Snow trains and alpine lake towns.",
-    hotelCategory: "4-star", price: 129999, discountPrice: 119999,
+    hotelCategory: "4-star", hotelName: "Alpine Lake View Hotel (or similar)", price: 129999, discountPrice: 119999,
     dayWise: [
       { day: 1, title: "Arrival Zurich", desc: "Check-in, old town walk." },
       { day: 2, title: "Zurich to Lucerne", desc: "Chapel Bridge, lake cruise." },
@@ -426,7 +488,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it4", destination: "Male Atoll, Maldives", name: "Maldives Overwater",
     loc: "Male Atoll", tag: "4D/3N", cat: "honeymoon",
     desc: "Overwater villas and coral reef snorkeling.",
-    hotelCategory: "5-star", price: 89999, discountPrice: 82999,
+    hotelCategory: "5-star", hotelName: "Overwater Villa Resort (or similar)", price: 89999, discountPrice: 82999,
     dayWise: [
       { day: 1, title: "Arrival", desc: "Speedboat/seaplane transfer, overwater villa check-in." },
       { day: 2, title: "Snorkeling excursion", desc: "Coral reef snorkeling trip." },
@@ -440,7 +502,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it5", destination: "Bangkok, Phuket, Krabi", name: "Thailand Highlights",
     loc: "Bangkok · Phuket · Krabi", tag: "6D/5N", cat: "beach",
     desc: "Islands, street food and night markets.",
-    hotelCategory: "3-star", price: 44999, discountPrice: 39999,
+    hotelCategory: "3-star", hotelName: "Bangkok/Phuket/Krabi Hotel Group (or similar)", price: 44999, discountPrice: 39999,
     dayWise: [
       { day: 1, title: "Arrival Bangkok", desc: "Check-in, night market visit." },
       { day: 2, title: "Bangkok sightseeing", desc: "Grand Palace, temples." },
@@ -456,7 +518,7 @@ const SEED_PACKAGES_INTL = [
   { id: "it6", destination: "Marina Bay, Sentosa (Singapore)", name: "Singapore Explorer",
     loc: "Marina Bay · Sentosa", tag: "5D/4N", cat: "city",
     desc: "Skyline views, theme parks and gardens.",
-    hotelCategory: "4-star", price: 59999, discountPrice: 54999,
+    hotelCategory: "4-star", hotelName: "Marina Bay Area Hotel (or similar)", price: 59999, discountPrice: 54999,
     dayWise: [
       { day: 1, title: "Arrival", desc: "Check-in, Marina Bay Sands SkyPark." },
       { day: 2, title: "Gardens by the Bay", desc: "Cloud Forest, light show." },
@@ -485,12 +547,17 @@ const AUTO_DESTINATIONS_INTL = [
 const CATS_INTL = ["beach", "city", "scenic", "honeymoon"];
 
 function loadDataIntl() {
+  let data;
   try {
     const raw = fs.readFileSync(DATA_FILE_INTL, "utf8");
-    return JSON.parse(raw);
+    data = JSON.parse(raw);
+    data.packages = data.packages || [];
   } catch {
-    return { packages: SEED_PACKAGES_INTL.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
+    data = { packages: SEED_PACKAGES_INTL.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
   }
+  // Backfill/repair slugs the same way loadData() does for India packages.
+  if (ensureSlugs(data.packages)) saveDataIntl(data);
+  return data;
 }
 function saveDataIntl(data) {
   fs.writeFileSync(DATA_FILE_INTL, JSON.stringify(data, null, 2), "utf8");
@@ -513,6 +580,7 @@ async function ensureWeeklyPackageIntl() {
     `Destination: "${destination}". JSON shape: ` +
     `{"name":"short catchy package name","loc":"place1 · place2 · place3","tag":"6D/5N",` +
     `"desc":"one short sentence","hotelCategory":"3-star/4-star/luxury etc",` +
+    `"hotelName":"a plausible hotel/resort name for this destination, add (or similar) at the end",` +
     `"dayWise":[{"day":1,"title":"...","desc":"..."}],` +
     `"inclusions":["...","..."],"exclusions":["...","..."],` +
     `"price":49999,"discountPrice":45999}`;
@@ -533,12 +601,13 @@ async function ensureWeeklyPackageIntl() {
       cat: CATS_INTL[data.destCursor % CATS_INTL.length],
       desc: parsed.desc || `Explore ${destination}.`,
       hotelCategory: parsed.hotelCategory || "4-star",
+      hotelName: parsed.hotelName || "",
       dayWise: Array.isArray(parsed.dayWise) ? parsed.dayWise : [],
       inclusions: Array.isArray(parsed.inclusions) ? parsed.inclusions : [],
       exclusions: Array.isArray(parsed.exclusions) ? parsed.exclusions : [],
       price: Number(parsed.price) || 49999,
       discountPrice: Number(parsed.discountPrice) || undefined,
-      imageUrl: generateImageUrl(destination),
+      imageUrl: await generateImageUrl(destination),
       source: "ai",
       createdAt: new Date().toISOString(),
     };
@@ -553,17 +622,19 @@ async function ensureWeeklyPackageIntl() {
       cat: CATS_INTL[data.destCursor % CATS_INTL.length],
       desc: `A fresh itinerary for ${destination}.`,
       hotelCategory: "4-star",
+      hotelName: "",
       dayWise: [{ day: 1, title: "Arrival", desc: "Details being finalized — check back soon." }],
       inclusions: ["Hotel stay", "Breakfast", "Transfers"],
       exclusions: ["International flights", "Visa fees", "Personal expenses"],
       price: 49999,
       discountPrice: undefined,
-      imageUrl: generateImageUrl(destination),
+      imageUrl: await generateImageUrl(destination),
       source: "ai",
       createdAt: new Date().toISOString(),
     };
   }
 
+  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   data.lastAutoWeek = week;
   saveDataIntl(data);
@@ -574,7 +645,7 @@ async function ensureWeeklyPackageIntl() {
 router.get("/international", async (req, res) => {
   try {
     const packages = await ensureWeeklyPackageIntl();
-    res.json({ ok: true, packages });
+    res.json({ ok: true, packages: packages.map(withSlug) });
   } catch (err) {
     console.error("packages(intl) list error:", err);
     res.status(500).json({ error: "Could not load packages." });
@@ -585,7 +656,7 @@ router.get("/international/:id", (req, res) => {
   const data = loadDataIntl();
   const pkg = data.packages.find((p) => p.id === req.params.id);
   if (!pkg) return res.status(404).json({ error: "Package not found." });
-  res.json({ ok: true, package: pkg });
+  res.json({ ok: true, package: withSlug(pkg) });
 });
 
 router.post("/international", adminLimiter, (req, res) => {
@@ -604,6 +675,7 @@ router.post("/international", adminLimiter, (req, res) => {
     cat: body.cat || "city",
     desc: body.desc || "",
     hotelCategory: body.hotelCategory || "4-star",
+    hotelName: (body.hotelName || "").trim(),
     dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
     inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
     exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
@@ -613,9 +685,10 @@ router.post("/international", adminLimiter, (req, res) => {
     source: "admin",
     createdAt: new Date().toISOString(),
   };
+  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   saveDataIntl(data);
-  res.json({ ok: true, package: pkg });
+  res.json({ ok: true, package: withSlug(pkg) });
 });
 
 router.put("/international/:id", adminLimiter, (req, res) => {
@@ -625,14 +698,14 @@ router.put("/international/:id", adminLimiter, (req, res) => {
   if (idx === -1) return res.status(404).json({ error: "Package not found." });
   const body = req.body || {};
   const allowed = [
-    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory",
+    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
     "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
   ];
   allowed.forEach((field) => {
     if (body[field] !== undefined) data.packages[idx][field] = body[field];
   });
   saveDataIntl(data);
-  res.json({ ok: true, package: data.packages[idx] });
+  res.json({ ok: true, package: withSlug(data.packages[idx]) });
 });
 
 router.delete("/international/:id", adminLimiter, (req, res) => {
@@ -643,6 +716,75 @@ router.delete("/international/:id", adminLimiter, (req, res) => {
   if (data.packages.length === before) return res.status(404).json({ error: "Package not found." });
   saveDataIntl(data);
   res.json({ ok: true });
+});
+
+/* ================================================================
+   SLUG SUPPORT (new) — flat, SEO-friendly URLs across BOTH India and
+   International packages, e.g. GET /api/packages/coorg-and-
+   chikmagalur-karnataka-coffee-estate-escape. Registered LAST so the
+   existing literal routes above (/india, /india/:id, /international,
+   /international/:id and their POST/PUT/DELETE) keep matching first —
+   these two routes only catch what nothing above already handled.
+
+   IMPORTANT: these two routes read from the SAME JSON files as
+   everything above (packages-data.json / packages-international-
+   data.json) via the same loadData()/loadDataIntl() — nothing new to
+   deploy, no database required. Every package in both files now also
+   carries a persisted `slug` field (see ensureSlugs() above), so this
+   works immediately on next server start with zero manual migration.
+================================================================ */
+
+// Public: full package detail by slug — checks India packages first,
+// then International. Used for the customer-facing package detail page
+// (SEO-friendly URL) instead of looking the package up by its internal id.
+router.get("/:slug", (req, res) => {
+  const slug = String(req.params.slug || "").trim().toLowerCase();
+  if (!slug) return res.status(404).json({ error: "Package not found." });
+
+  const indiaData = loadData();
+  let pkg = indiaData.packages.find((p) => p.slug === slug);
+  let category = "india";
+
+  if (!pkg) {
+    const intlData = loadDataIntl();
+    pkg = intlData.packages.find((p) => p.slug === slug);
+    category = "international";
+  }
+
+  if (!pkg) return res.status(404).json({ error: "Package not found." });
+  res.json({ ok: true, category, package: withSlug(pkg) });
+});
+
+// Public: flat list of every package (India + International) with just
+// enough fields for a sitemap — id, slug, name, category, last-updated.
+// Does NOT trigger the weekly AI auto-add (that only happens on the
+// existing /india and /international list routes) so hitting this for
+// a sitemap build never costs an AI call.
+router.get("/", (req, res) => {
+  try {
+    const indiaData = loadData();
+    const intlData = loadDataIntl();
+    const packages = [
+      ...indiaData.packages.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        category: "india",
+        updatedAt: p.createdAt || null,
+      })),
+      ...intlData.packages.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        category: "international",
+        updatedAt: p.createdAt || null,
+      })),
+    ];
+    res.json({ ok: true, total: packages.length, packages });
+  } catch (err) {
+    console.error("packages: sitemap list error:", err);
+    res.status(500).json({ error: "Could not load packages." });
+  }
 });
 
 module.exports = router;

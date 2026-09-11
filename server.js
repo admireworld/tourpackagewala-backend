@@ -37,15 +37,39 @@ app.use(cors({ origin: ALLOWED_ORIGIN, credentials: false }));
 app.use(express.json({ limit: "10kb" }));
 
 /* ---------- Mailer ---------- */
+// FIX (additive — OTP logic below is completely untouched): the transporter
+// previously had no connection/greeting/socket timeouts, so if the SMTP
+// connection to Gmail ever hangs (blocked port on the host, wrong network,
+// bad credentials that Google doesn't reject quickly, etc.) the request
+// could sit "in flight" for minutes with no response at all — which is
+// exactly what makes the frontend button look permanently stuck on
+// "Sending..." (the frontend's try/finally only resets the button once
+// the request actually settles, success or failure). Explicit timeouts
+// here make it fail FAST with a real, catchable error instead, so the
+// existing try/catch in /api/send-otp below can do its job.
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 10000, // fail fast if the SMTP server can't be reached at all
+  greetingTimeout: 10000, // fail fast if it connects but never greets back
+  socketTimeout: 15000, // fail fast if the connection goes silent mid-send
 });
 
 async function sendOtpEmail(toEmail, toName, otp) {
+  // FIX (additive): fail immediately with a clear message if the mailer
+  // credentials were never configured on this host, instead of letting
+  // nodemailer attempt a login with undefined/blank values (which can be
+  // slow and produces a confusing error). Nothing about OTP generation/
+  // verification changes — this only guards the "send the email" step.
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error(
+      "Email is not configured on the server yet — set EMAIL_USER and EMAIL_PASS " +
+        "(a Gmail App Password, not your normal password) in the backend's environment variables."
+    );
+  }
   await transporter.sendMail({
     from: `"AdmireDworld Travel" <${process.env.EMAIL_USER}>`,
     to: toEmail,
@@ -125,6 +149,11 @@ app.use("/api/admin", require("./admin-auth"));
    edit the public contact email/phone/WhatsApp number from the dashboard
    instead of hardcoding them in the frontend) ---------- */
 app.use("/api/settings", require("./settings"));
+
+/* ---------- AI Content Provider settings (new feature — see ai-settings.js
+   + ai-provider.js; lets an admin switch the blog/package AI provider and
+   rotate its API key from the dashboard, no code change/redeploy needed) --- */
+app.use("/api/ai-settings", require("./ai-settings"));
 
 /* ---------- Routes ---------- */
 app.get("/api/health", (req, res) => res.json({ ok: true }));

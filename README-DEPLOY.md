@@ -108,17 +108,34 @@ exactly as before. This exists because both readers and AI answer engines
 source-backed content over generic AI filler — that's what actually gets a
 daily AI blog ranked, cited, and clicked into an enquiry.
 
-### Upgrading to a paid AI provider later
+### AI Content Provider — now editable from the Admin Dashboard (no redeploy)
 
-Nothing else needs to change in the code — just add these env vars on
-Render when you're ready to pay for higher-quality content:
-- `AI_TEXT_PROVIDER=openai` and `AI_IMAGE_PROVIDER=openai`
-- `OPENAI_API_KEY=<your key>`
+`blog.js` and `packages.js` no longer decide the AI provider themselves —
+they both call `generateText()` / `generateImageUrl()` from the new shared
+`ai-provider.js`, which reads the current provider + API key from
+`ai-settings-data.json` (same on-disk JSON pattern as `settings.js`).
 
-`blog.js` already has the branching logic in place (`generateText` /
-`generateImageUrl`) — it just needs the OpenAI image-generation call
-filled in when you're on a paid plan (the text side already works with
-OpenAI's chat API out of the box).
+- Go to the Admin Dashboard → **Settings → "AI Content Provider"**.
+- Pick the text provider — **Gemini** (Google AI Studio), **OpenAI**, or
+  the free **Pollinations** — and paste in the matching API key.
+- Click **Save AI provider**. That's it — the very next blog post / weekly
+  package uses the new provider/key. No env var, no code change, no
+  redeploy, and no server restart needed.
+- If the selected paid provider ever fails (expired/invalid key, quota hit,
+  network issue), `ai-provider.js` automatically falls back to the free
+  Pollinations provider for that one call and logs why — so a bad key can
+  never stop the daily blog or weekly package from generating.
+- Env vars (`AI_TEXT_PROVIDER`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.)
+  still work as a fallback default, but whatever is saved from the
+  dashboard always takes priority.
+- Image generation is currently always the free Pollinations provider
+  (no key needed) — only the text provider is swappable for now.
+
+Like the other `*-data.json` files in this project (`blog-data.json`,
+`refer-data.json`, etc.), `ai-settings-data.json` holds a real secret (the
+API key) once you save one — make sure it's excluded from git the same
+way (see `.gitignore`) and only ever fetched over the admin-key-protected
+`/api/ai-settings` route.
 
 ## New: India Packages now come from the backend (with weekly AI auto-add)
 
