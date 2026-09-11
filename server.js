@@ -23,7 +23,7 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 app.set('trust proxy', 1);
-const PORT = process.env.PORT...
+const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 
