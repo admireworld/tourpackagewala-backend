@@ -48,14 +48,20 @@ app.use(express.json({ limit: "10kb" }));
 // here make it fail FAST with a real, catchable error instead, so the
 // existing try/catch in /api/send-otp below can do its job.
 const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  connectionTimeout: 10000, // fail fast if the SMTP server can't be reached at all
-  greetingTimeout: 10000, // fail fast if it connects but never greets back
-  socketTimeout: 15000, // fail fast if the connection goes silent mid-send
+  tls: {
+    ciphers: 'SSLv3',
+    rejectUnauthorized: false
+  },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 async function sendOtpEmail(toEmail, toName, otp) {
