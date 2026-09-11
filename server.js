@@ -22,7 +22,8 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+app.set('trust proxy', 1);
+const PORT = process.env.PORT...
 const JWT_SECRET = process.env.JWT_SECRET;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 
@@ -48,20 +49,14 @@ app.use(express.json({ limit: "10kb" }));
 // here make it fail FAST with a real, catchable error instead, so the
 // existing try/catch in /api/send-otp below can do its job.
 const transporter = nodemailer.createTransport({
+  service: "gmail",
   host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    ciphers: 'SSLv3',
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
 });
 
 async function sendOtpEmail(toEmail, toName, otp) {
