@@ -25,6 +25,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+app.set("trust proxy", 1);
 
 if (!JWT_SECRET) {
   console.error("Missing JWT_SECRET in .env — refusing to start.");
@@ -48,14 +49,16 @@ app.use(express.json({ limit: "10kb" }));
 // here make it fail FAST with a real, catchable error instead, so the
 // existing try/catch in /api/send-otp below can do its job.
 const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  connectionTimeout: 10000, // fail fast if the SMTP server can't be reached at all
-  greetingTimeout: 10000, // fail fast if it connects but never greets back
-  socketTimeout: 15000, // fail fast if the connection goes silent mid-send
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 // FIX (additive, diagnostics only — no OTP logic touched): verify the SMTP
