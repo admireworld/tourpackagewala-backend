@@ -1,9 +1,24 @@
 # Backend Deploy Guide (Render — Free)
 
-Ye backend OTP ko poori tarah server pe generate, hash, aur verify karta hai.
-Browser ko kabhi bhi OTP ka actual value nahi dikhta.
+Ye backend OTP ko server pe generate, hash, aur verify karta hai (5-minute
+expiry, single-use, rate-limited — waisa hi jaisa pehle tha).
 
-## Step 1 — Gmail se email bhejne ke liye App Password banao
+**CHANGED — OTP ab EmailJS se frontend se bhejta hai, backend se nahi.**
+Render ke free tier pe outbound SMTP (Gmail/nodemailer) block/unreliable
+hone ki wajah se OTP emails customer tak nahi pahunch rahe the. Ab
+`/api/send-otp` OTP wapas frontend ko bhej deta hai, aur `script.js` usi OTP
+ko EmailJS (browser se seedha email bhejne wali free service) ke through
+customer ke inbox mein deliver karta hai. Iske liye tumhe sirf frontend mein
+EmailJS setup karna hai — dekho `frontend/README-EMAILJS.md`.
+
+`EMAIL_USER` / `EMAIL_PASS` (niche Step 1) ab OTP ke liye **zaroori nahi**
+hain — lekin inhi env vars ko backend ke baaki features abhi bhi use karte
+hain (admin ko internal notification emails: naye leads, wedding enquiries,
+customize-package quotes, refer & earn payouts). Agar wo notifications bhi
+chahiye to Step 1 follow karo, warna skip kar sakte ho — baaki sab kaam
+karega, sirf wo internal emails nahi jaayenge.
+
+## Step 1 — (Optional, sirf admin notification emails ke liye) Gmail App Password banao
 
 (Ya chaho to Resend/SendGrid bhi use kar sakte ho — niche note hai)
 
@@ -33,11 +48,11 @@ Browser ko kabhi bhi OTP ka actual value nahi dikhta.
    - **Instance Type**: Free
 5. **Environment Variables** section mein ye sab add karo (`.env.example`
    file dekh ke, real values ke saath):
-   - `JWT_SECRET` → ek lambi random string (niche command se bana sakte ho)
-   - `ALLOWED_ORIGIN` → tumhari website ka URL (jaise `https://admiredworld.netlify.app`)
-   - `EMAIL_SERVICE` → `gmail`
-   - `EMAIL_USER` → tumhara Gmail address
-   - `EMAIL_PASS` → Step 1 wala 16-character app password
+   - `JWT_SECRET` → ek lambi random string (niche command se bana sakte ho, **zaroori**)
+   - `ALLOWED_ORIGIN` → tumhari website ka URL (jaise `https://admiredworld.netlify.app`, **zaroori**)
+   - `EMAIL_SERVICE` → `gmail` (optional — sirf admin notification emails ke liye, OTP ke liye nahi)
+   - `EMAIL_USER` → tumhara Gmail address (optional, same reason)
+   - `EMAIL_PASS` → Step 1 wala 16-character app password (optional, same reason)
 6. **Create Web Service** pe click karo. Render build karke ek URL dega,
    jaise: `https://admiredworld-backend.onrender.com`
 
