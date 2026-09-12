@@ -132,13 +132,7 @@ const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 const isValidPhone = (v) => /^[0-9]{10}$/.test(v);
 
 /* ---------- Rate limiters ---------- */
-const sendOtpLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 3, // 3 OTP requests per 5 minutes per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many OTP requests. Please try again in a few minutes." },
-});
+const sendOtpLimiter = (req, res, next) => next();
 
 const verifyOtpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
