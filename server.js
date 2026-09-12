@@ -431,8 +431,8 @@ app.post(
       );
 
       res.status(500).json({
-        error:
-          "Could not verify OTP right now. Please try again.",
+        error:err.message
+          
       });
     }
   }
