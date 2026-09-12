@@ -22,8 +22,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
 const app = express();
-app.set('trust proxy', 1);
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 
@@ -49,15 +48,45 @@ app.use(express.json({ limit: "10kb" }));
 // here make it fail FAST with a real, catchable error instead, so the
 // existing try/catch in /api/send-otp below can do its job.
 const transporter = nodemailer.createTransport({
-  service: "gmail",
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  service: process.env.EMAIL_SERVICE || "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 10000, // fail fast if the SMTP server can't be reached at all
+  greetingTimeout: 10000, // fail fast if it connects but never greets back
+  socketTimeout: 15000, // fail fast if the connection goes silent mid-send
 });
+
+// FIX (additive, diagnostics only — no OTP logic touched): verify the SMTP
+// login ONCE when the server boots, and print a loud, unmistakable log line
+// either way. This is what actually tells you WHY OTP emails aren't
+// arriving — e.g. "Invalid login" almost always means EMAIL_PASS is your
+// normal Gmail password instead of a 16-character App Password (Gmail
+// rejects normal passwords for app logins when 2-Step Verification is on,
+// which it must be to even generate an App Password). Check your Render
+// "Logs" tab right after a deploy/restart for this line.
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter.verify((err) => {
+    if (err) {
+      console.error(
+        "❌ EMAIL SENDING IS BROKEN — OTPs will NOT reach customers. " +
+          "SMTP login failed for EMAIL_USER=" + process.env.EMAIL_USER + ". " +
+          "Reason: " + err.message + ". " +
+          "Fix: generate a fresh Gmail App Password (Google Account → Security → " +
+          "2-Step Verification → App Passwords) and set it as EMAIL_PASS — " +
+          "not your normal Gmail login password."
+      );
+    } else {
+      console.log("✅ Email transporter verified — OTP emails can be sent from " + process.env.EMAIL_USER);
+    }
+  });
+} else {
+  console.error(
+    "❌ EMAIL_USER / EMAIL_PASS are not set on this server — OTP emails cannot be sent at all. " +
+      "Set them in your hosting provider's Environment Variables (see README-DEPLOY.md, Step 1)."
+  );
+}
 
 async function sendOtpEmail(toEmail, toName, otp) {
   // FIX (additive): fail immediately with a clear message if the mailer
@@ -156,12 +185,85 @@ app.use("/api/settings", require("./settings"));
    rotate its API key from the dashboard, no code change/redeploy needed) --- */
 app.use("/api/ai-settings", require("./ai-settings"));
 
+/* ---------- Permanent storage check (new — see db.js/store.js) ----------
+   Bookings, leads, referral earnings, and wedding enquiries/venues are
+   real customer data. This module lets them live in a free MongoDB Atlas
+   cluster instead of a local JSON file, so they SURVIVE Render restarts/
+   redeploys/free-tier sleep cycles. Purely informational check — it never
+   blocks startup either way, it just tells you which mode you're in.
+   See README-DEPLOY.md → "Permanent storage" for setup steps. */
+if (process.env.MONGODB_URI) {
+  require("./db")
+    .getDb()
+    .then((db) => {
+      if (!db) {
+        console.error(
+          "❌ MONGODB_URI is set but the connection failed — bookings/leads/referrals/wedding data will use " +
+            "local JSON files for now (NOT permanent on Render). Double-check the connection string and that " +
+            "your MongoDB Atlas cluster allows connections from 0.0.0.0/0 (Network Access)."
+        );
+      }
+    });
+} else {
+  console.warn(
+    "⚠️  MONGODB_URI is not set — bookings, leads, referral earnings, and wedding enquiries are being saved to " +
+      "local JSON files, which Render's free tier WIPES on every restart/sleep/redeploy. See README-DEPLOY.md → " +
+      "\"Permanent storage\" to fix this with a free MongoDB Atlas cluster (~5 minutes, no credit card)."
+  );
+}
+
 /* ---------- Routes ---------- */
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
+// FIX (additive, diagnostics only): lets you actually SEE the real SMTP
+// error instead of guessing. Open a terminal / Postman / browser console
+// and run, replacing YOUR_ADMIN_KEY and putting your own inbox as "to":
+//
+//   fetch("https://tourpackagewala-backend.onrender.com/api/admin/test-email", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify({ adminKey: "YOUR_ADMIN_KEY", to: "you@example.com" })
+//   }).then(r => r.json()).then(console.log)
+//
+// The JSON response will either say the email was sent (check inbox +
+// spam folder) or give you the EXACT reason it failed (e.g. "Invalid
+// login", "Missing credentials", etc.) — that reason tells you exactly
+// what to fix in the Render Environment Variables.
+app.post("/api/admin/test-email", async (req, res) => {
+  const { adminKey, to } = req.body || {};
+  const ADMIN_KEY_CHECK = process.env.ADMIN_KEY || "";
+  if (ADMIN_KEY_CHECK && adminKey !== ADMIN_KEY_CHECK) {
+    return res.status(401).json({ error: "Invalid admin key." });
+  }
+  if (!to || !isValidEmail(to)) {
+    return res.status(400).json({ error: "Provide a valid 'to' email address in the request body." });
+  }
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return res.status(500).json({
+      error: "EMAIL_USER / EMAIL_PASS are not set on this server's Environment Variables.",
+    });
+  }
+  try {
+    await transporter.sendMail({
+      from: `"AdmireDworld Travel" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: "AdmireDworld Travel — test email",
+      text: "If you received this, OTP emails are configured correctly on the server.",
+    });
+    res.json({ ok: true, message: `Test email sent to ${to}. Check the inbox AND the spam/junk folder.` });
+  } catch (err) {
+    console.error("test-email error:", err);
+    res.status(500).json({
+      error: err.message || "Failed to send test email.",
+      hint: "This exact message is the real reason OTP emails aren't sending — usually 'Invalid login' means EMAIL_PASS must be a Gmail App Password, not your normal password.",
+    });
+  }
+});
+
 app.post("/api/send-otp", sendOtpLimiter, async (req, res) => {
   try {
-    const { name, phone, email } = req.body || {};
+    const { name, phone } = req.body || {};
+    const email = String((req.body || {}).email || "").trim().toLowerCase();
     if (!name || !isValidPhone(phone) || !isValidEmail(email)) {
       return res.status(400).json({ error: "Please provide a valid name, 10-digit phone, and email." });
     }
@@ -187,7 +289,8 @@ app.post("/api/send-otp", sendOtpLimiter, async (req, res) => {
 
 app.post("/api/verify-otp", verifyOtpLimiter, async (req, res) => {
   try {
-    const { email, otp } = req.body || {};
+    const { otp } = req.body || {};
+    const email = String((req.body || {}).email || "").trim().toLowerCase();
     if (!isValidEmail(email) || !/^[0-9]{6}$/.test(otp || "")) {
       return res.status(400).json({ error: "Invalid request." });
     }

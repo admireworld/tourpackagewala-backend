@@ -355,3 +355,147 @@ form can't be brute-forced.
 
 See `backend/.env.example` for a complete list of every environment
 variable used across the whole project (existing + new).
+
+---
+
+## 🔧 OTP email nahi aa raha? Yaha se check karo
+
+Agar login karte time OTP email client ki inbox mein nahi pahunch raha, iska
+matlab hai server email bhej hi nahi pa raha (ya spam mein ja raha hai). Yeh
+naya diagnostic tool use karo — bina Render logs khole bhi asli reason pata
+chal jayega:
+
+1. Apne backend ko latest code ke saath redeploy karo (isme naya
+   `/api/admin/test-email` route add hua hai).
+2. Browser ka address bar mein ye URL kholo (apna backend URL aur admin
+   key daal ke) — ya Postman/browser console se ye chalao:
+
+   ```js
+   fetch("https://tourpackagewala-backend.onrender.com/api/admin/test-email", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({ adminKey: "YAHA_APNI_ADMIN_KEY_DAALO", to: "apna-email@gmail.com" })
+   }).then(r => r.json()).then(console.log)
+   ```
+
+3. Jo response aayega, wahi asli wajah bata dega:
+   - **"EMAIL_USER / EMAIL_PASS are not set..."** → Render → Environment
+     mein ye dono variable set hi nahi hain. Step 1 & 2 (upar) follow karo.
+   - **"Invalid login"** → sabse common wajah. `EMAIL_PASS` mein apna
+     normal Gmail password daala hua hai — Gmail normal password se login
+     allow nahi karta. 2-Step Verification on karke naya **App Password**
+     banao (16-character, spaces hata ke) aur `EMAIL_PASS` mein wahi daalo.
+   - **"ok: true, Test email sent..."** → server sahi se email bhej raha
+     hai. Ab check karo:
+     - Client ka **Spam / Junk / Promotions** folder — OTP emails naye
+       Gmail account se aksar wahi chale jate hain shuruaat mein.
+     - Kahin client galat email ID type to nahi kar raha login form mein.
+
+4. Server start hote hi Render ke **Logs** tab mein bhi ek line dikhegi:
+   - `✅ Email transporter verified` → email setup sahi hai.
+   - `❌ EMAIL SENDING IS BROKEN` → uske saamne wajah bhi likhi hogi.
+
+Is naye route ko bhi wahi `ADMIN_KEY` protect karta hai jo baaki admin
+routes use karte hain, so koi bhi random insaan isse spam ke liye use nahi
+kar sakta.
+
+---
+
+## 📞 Contact email/phone/WhatsApp change karne pe sirf mera hi device p dikhta hai, baad mein wapas purana aa jata hai?
+
+Ye bhi Render free hosting ke **disk permanent na hone** wali wahi limitation
+hai jo upar OTP section mein bataya gaya — thodi der inactive rehne pe
+Render free service so jaati hai, aur next request pe wapas jagte waqt saari
+locally-saved files (`settings-data.json` samet) reset ho jaati hain apne
+purane hardcoded values pe. Isiliye jis device se change kiya wahi turant
+dikhta hai (jab tak server chalu hai), lekin thodi der baad koi bhi device
+purana email/number dekhta hai.
+
+**Permanent fix**: Admin Dashboard se change karne ke saath-saath, Render →
+apni service → **Environment** mein ye variables bhi set kar do — ye kabhi
+reset nahi hote, chahe server so jaye ya redeploy ho:
+
+- `CONTACT_EMAIL` → jo email dikhana hai
+- `CONTACT_PHONE` → primary phone number
+- `CONTACT_PHONE_ALT` → secondary phone number (optional)
+- `WHATSAPP_NUMBER` → digits only, country code ke saath (jaise `919639343585`)
+
+Env var set karne ke baad service ek baar **redeploy/restart** karo — ab ye
+value hamesha ke liye stick karegi, har device pe, server restart hone ke
+baad bhi. Admin Dashboard ka "Save" button ab bhi turant kaam karega (bina
+redeploy ke) — bas woh sirf tab tak tikta hai jab tak server dobara restart
+na ho; permanent rakhne ke liye env var hi asli tarika hai.
+
+⚠️ **Note**: Yehi wajah Bookings, Leads, Refer & Earn, Wedding enquiries
+jaisa transactional data pe bhi lagu hoti hai — ye sab bhi isi tarah ki
+local JSON file mein save hote hain, jo Render free tier pe restart pe
+reset ho sakti hai. Agar aap chahte ho ki customer bookings/leads kabhi na
+khoye, to Render ka paid plan lo jisme **Persistent Disk** add-on hota hai,
+ya inhe ek real database (jaise MongoDB Atlas ka free tier) mein migrate
+karvao — ye ek bada change hai, jab chaho bata dena, main woh bhi kar dunga.
+
+---
+
+## 🗄️ Permanent storage for Bookings, Leads, Refer & Earn, Wedding enquiries (free MongoDB Atlas)
+
+**Problem this fixes**: Bookings, Leads, Refer & Earn, aur Wedding
+enquiries — ye sab customer ka **real data** hai. Pehle ye sab ek local
+JSON file mein save hota tha, jo Render free tier ke disk pe rehta tha —
+aur wo disk **permanent nahi hai**. Server so ke jaagne pe, ya redeploy
+hone pe, ye file wipe ho jaati thi aur customer ka data gayab ho jata tha.
+
+**Fix**: Ab is code mein `MONGODB_URI` set karte hi ye sab data ek free
+MongoDB Atlas cluster mein save hone lagega — jo kabhi wipe nahi hota,
+chahe Render server kitni baar bhi so-jaag jaye ya redeploy ho.
+
+⚠️ **Agar aap `MONGODB_URI` set nahi karte, to bhi site kaam karegi** —
+bas ye sab data purane tarike se local file mein hi save hota rahega
+(wahi restart-reset risk ke saath). Ye setup optional hai lekin **strongly
+recommended** hai kyunki isme real customer bookings/leads/paise ka
+hisaab involved hai.
+
+### Step 1 — Free MongoDB Atlas cluster banao (5 minute, credit card nahi chahiye)
+
+1. [mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register) pe jaake free account banao.
+2. "Build a Database" pe click karo → **M0 (Free)** tier choose karo → koi bhi region select karo (jo aapke Render server ke paas ho, jaise Mumbai/Singapore) → "Create".
+3. **Database User** banane ko kahega — ek username/password set karo (isse yaad rakho, aage lagega). "Create User" pe click karo.
+4. **Network Access** step mein "Allow Access from Anywhere" choose karo (ya manually `0.0.0.0/0` add karo). Ye zaroori hai kyunki Render ka IP address fixed nahi hota.
+5. "Finish and Close" ke baad, apne cluster ke "Connect" button pe click karo → **"Drivers"** choose karo → Node.js driver ka **connection string** copy karo. Ye kuch aisa dikhega:
+
+   ```
+   mongodb+srv://tumhara_username:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   ```
+
+6. Us string mein `<password>` ki jagah apna asli password daal do (jo Step 3 mein banaya tha).
+
+### Step 2 — Render mein env var set karo
+
+1. Render dashboard → apni backend service → **Environment** tab.
+2. Naya variable add karo:
+   - **Key**: `MONGODB_URI`
+   - **Value**: Step 1 wali poori connection string (password ke saath)
+3. Save karo — Render service khud-ba-khud restart ho jayegi.
+
+### Step 3 — Confirm karo ki connect ho gaya
+
+Render ke **Logs** tab mein service restart hone ke turant baad ye line dhundo:
+
+- `✅ MongoDB connected — bookings/leads/referrals/wedding enquiries are now permanent.` → sab set hai, ab data kabhi nahi khoyega.
+- `❌ MongoDB connection failed...` → connection string galat hai (password check karo, `<password>` ki jagah asli password daala hai ya nahi), ya Network Access mein `0.0.0.0/0` allow nahi kiya.
+- Agar `MONGODB_URI` bilkul set hi nahi kiya, to `⚠️  MONGODB_URI is not set...` dikhega — matlab ab bhi purane local-file tarike se chal raha hai.
+
+Ye ek baar set karne ke baad, koi code change ya dubara zip download karne ki zaroorat nahi — data hamesha ke liye Mongo mein save hota rahega, chahe Render kitni baar bhi restart/redeploy ho.
+
+### Ye kya-kya cover karta hai
+
+- ✅ Bookings (`/api/bookings`)
+- ✅ Leads (`/api/leads`)
+- ✅ Refer & Earn — codes, referred count, reward earned (`/api/refer`)
+- ✅ Destination Wedding — enquiries AND admin-added venues (`/api/wedding`)
+
+Baaki modules (Blog posts, India/International Packages, Fixed Departures
+seat counts, AI provider settings, Site contact settings) filhal isi
+upgrade mein shaamil nahi hain — wo apne purane tarike se hi kaam karte
+hain (Site Settings pehle se hi env-var fallback wala fix use karta hai,
+upar dekho). Agar chaho to inhe bhi isी Mongo store mein migrate kar sakta
+hoon — bata dena.

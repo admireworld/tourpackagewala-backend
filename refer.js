@@ -37,31 +37,24 @@
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const nodemailer = require("nodemailer");
+const store = require("./store");
 
 const router = express.Router();
 
-const DATA_FILE = path.join(__dirname, "refer-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const REFERRAL_PERCENT = Number(process.env.REFERRAL_PERCENT) || 5; // % of booking amount, paid to the referrer
 const WELCOME_BONUS = 500; // ₹ credited to the new user who signs up via a referral (unchanged, given at signup)
 
-/* ---------- Storage (simple JSON file) ---------- */
-function loadData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return { byEmail: {}, byCode: {}, redeemedEmails: {} };
-  }
+/* ---------- Storage (MongoDB if MONGODB_URI is set, else local JSON file — see store.js) ---------- */
+async function loadData() {
+  return store.load("refer", { byEmail: {}, byCode: {}, redeemedEmails: {} });
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+async function saveData(data) {
+  return store.save("refer", data);
 }
 
 function normalizeEmail(email) {
@@ -130,12 +123,12 @@ const applyLimiter = rateLimit({
 
 // Get (or create) the referral code + stats for a logged-in user.
 // Called from the frontend with the user's own email once they open the tab.
-router.post("/my-code", (req, res) => {
+router.post("/my-code", async (req, res) => {
   const email = normalizeEmail((req.body || {}).email);
   const name = ((req.body || {}).name || "").trim();
   if (!email) return res.status(400).json({ error: "Email is required." });
 
-  const data = loadData();
+  const data = await loadData();
   let entry = data.byEmail[email];
 
   if (!entry) {
@@ -144,10 +137,10 @@ router.post("/my-code", (req, res) => {
     entry = { email, name, code, referredCount: 0, rewardEarned: 0, createdAt: new Date().toISOString() };
     data.byEmail[email] = entry;
     data.byCode[code] = email;
-    saveData(data);
+    await saveData(data);
   } else if (name && entry.name !== name) {
     entry.name = name; // keep the display name fresh
-    saveData(data);
+    await saveData(data);
   }
 
   res.json({
@@ -163,7 +156,7 @@ router.post("/my-code", (req, res) => {
 // that visitor verifies their OTP, if they arrived with a ?ref=CODE link.
 // This does NOT pay out any reward yet — that only happens once their
 // booking is confirmed (see creditReferralForBooking below).
-router.post("/apply", applyLimiter, (req, res) => {
+router.post("/apply", applyLimiter, async (req, res) => {
   const { code, refereeEmail, refereeName } = req.body || {};
   const cleanEmail = normalizeEmail(refereeEmail);
   const cleanCode = String(code || "").trim().toUpperCase();
@@ -172,7 +165,7 @@ router.post("/apply", applyLimiter, (req, res) => {
     return res.status(400).json({ error: "Missing referral code or email." });
   }
 
-  const data = loadData();
+  const data = await loadData();
   const referrerEmail = data.byCode[cleanCode];
   if (!referrerEmail) {
     return res.status(404).json({ error: "Referral code not found." });
@@ -193,17 +186,17 @@ router.post("/apply", applyLimiter, (req, res) => {
     rewardedBookingIds: [], // filled in once a confirmed booking actually pays the referrer
   };
 
-  saveData(data);
+  await saveData(data);
   res.json({ ok: true, welcomeBonus: WELCOME_BONUS, referrerName: referrer.name || null });
 });
 
 // Admin: see all referrers, sorted by who's earned the most.
-router.get("/admin/all", (req, res) => {
+router.get("/admin/all", async (req, res) => {
   const adminKey = req.query.adminKey || req.headers["x-admin-key"];
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
   const rows = Object.values(data.byEmail).sort((a, b) => b.rewardEarned - a.rewardEarned);
   res.json({ ok: true, referrers: rows, referralPercent: REFERRAL_PERCENT });
 });
@@ -217,7 +210,7 @@ router.get("/admin/all", (req, res) => {
 ----------------------------------------------------------------------- */
 async function creditReferralForBooking({ refereeEmail, bookingId, bookingItemName, bookingAmount }) {
   const cleanEmail = normalizeEmail(refereeEmail);
-  const data = loadData();
+  const data = await loadData();
   const redemption = data.redeemedEmails[cleanEmail];
   if (!redemption) return null; // this person wasn't referred by anyone
 
@@ -232,7 +225,7 @@ async function creditReferralForBooking({ refereeEmail, bookingId, bookingItemNa
   referrer.rewardEarned += rewardAmount;
   redemption.rewardedBookingIds.push(bookingId);
 
-  saveData(data);
+  await saveData(data);
 
   await sendReferralRewardEmail({
     referrerEmail: referrer.email,

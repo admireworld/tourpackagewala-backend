@@ -31,19 +31,17 @@
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
 const PDFDocument = require("pdfkit");
+const store = require("./store");
 
 const { creditReferralForBooking } = require("./refer");
 const { reserveSeat } = require("./fixed");
 
 const router = express.Router();
 
-const DATA_FILE = path.join(__dirname, "bookings-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const JWT_SECRET = process.env.JWT_SECRET; // same secret server.js uses to sign the login token
 
@@ -79,18 +77,13 @@ function requireAuth(req, res, next) {
   }
 }
 
-/* ---------- Storage (simple JSON file) ---------- */
-function loadData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return { bookings: [] };
-  }
+/* ---------- Storage (MongoDB if MONGODB_URI is set, else local JSON file — see store.js) ---------- */
+async function loadData() {
+  return store.load("bookings", { bookings: [] });
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+async function saveData(data) {
+  return store.save("bookings", data);
 }
 
 /* ---------- Rate limiting ---------- */
@@ -104,14 +97,14 @@ const createLimiter = rateLimit({
 /* ---------- Routes ---------- */
 
 // Customer-facing: called right after someone confirms a booking on the site.
-router.post("/", createLimiter, (req, res) => {
+router.post("/", createLimiter, async (req, res) => {
   const b = req.body || {};
   const user = b.user || {};
   if (!b.itemId || !b.itemName || !user.email || !user.name) {
     return res.status(400).json({ error: "Missing booking or user details." });
   }
 
-  const data = loadData();
+  const data = await loadData();
   const booking = {
     id: `bk-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     itemId: b.itemId,
@@ -130,7 +123,7 @@ router.post("/", createLimiter, (req, res) => {
 
   data.bookings.unshift(booking);
   data.bookings = data.bookings.slice(0, 1000);
-  saveData(data);
+  await saveData(data);
 
   // Fixed Departures only: knock a seat off the exact date reserved, so
   // /api/fixed's "seats left" and the "Check Availability" panel reflect
@@ -149,9 +142,9 @@ router.post("/", createLimiter, (req, res) => {
 // Customer-facing: view YOUR OWN bookings — works from any device, as
 // long as you log in with the same account (email). Requires the login
 // session token (same one used by /api/me in server.js).
-router.get("/mine", requireAuth, (req, res) => {
+router.get("/mine", requireAuth, async (req, res) => {
   const email = String(req.user.email || "").trim().toLowerCase();
-  const data = loadData();
+  const data = await loadData();
   const mine = data.bookings.filter((b) => b.user.email === email);
   // customerId is the same value for every booking of this customer — attached
   // per-row (handy for the voucher/table) and once at the top level.
@@ -162,9 +155,9 @@ router.get("/mine", requireAuth, (req, res) => {
 // Customer-facing: download a PDF voucher for ONE of your own bookings.
 // Only the booking's own account (verified via the login session token,
 // same as /mine above) can download it — never by guessing the booking id.
-router.get("/voucher/:id", requireAuth, (req, res) => {
+router.get("/voucher/:id", requireAuth, async (req, res) => {
   const email = String(req.user.email || "").trim().toLowerCase();
-  const data = loadData();
+  const data = await loadData();
   const booking = data.bookings.find((b) => b.id === req.params.id);
   if (!booking) return res.status(404).json({ error: "Booking not found." });
   if (booking.user.email !== email) {
@@ -227,12 +220,12 @@ router.get("/voucher/:id", requireAuth, (req, res) => {
 });
 
 // Admin: view all bookings (pending + confirmed), most recent first.
-router.get("/admin/all", (req, res) => {
+router.get("/admin/all", async (req, res) => {
   const adminKey = req.query.adminKey || req.headers["x-admin-key"];
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
   res.json({ ok: true, bookings: data.bookings });
 });
 
@@ -245,14 +238,14 @@ router.post("/admin/confirm", async (req, res) => {
   }
   if (!bookingId) return res.status(400).json({ error: "bookingId is required." });
 
-  const data = loadData();
+  const data = await loadData();
   const booking = data.bookings.find((b) => b.id === bookingId);
   if (!booking) return res.status(404).json({ error: "Booking not found." });
 
   if (booking.status !== "confirmed") {
     booking.status = "confirmed";
     booking.confirmedAt = new Date().toISOString();
-    saveData(data);
+    await saveData(data);
   }
 
   // Only try to credit + email once, even if this endpoint is called again.
@@ -271,7 +264,7 @@ router.post("/admin/confirm", async (req, res) => {
     }
     if (referralResult) {
       booking.referralReward = referralResult;
-      saveData(data);
+      await saveData(data);
     }
   }
 

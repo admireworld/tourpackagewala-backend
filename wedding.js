@@ -32,14 +32,12 @@
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const rateLimit = require("express-rate-limit");
 const nodemailer = require("nodemailer");
+const store = require("./store");
 
 const router = express.Router();
 
-const DATA_FILE = path.join(__dirname, "wedding-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 
 /* ---------- Default curated venues (used the first time the file doesn't exist) ---------- */
@@ -74,21 +72,16 @@ function withFacilityDefaults(v) {
   };
 }
 
-/* ---------- Storage (simple JSON file) ---------- */
-function loadData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    const parsed = JSON.parse(raw);
-    parsed.venues = (parsed.venues || []).map(withFacilityDefaults);
-    parsed.enquiries = parsed.enquiries || [];
-    return parsed;
-  } catch {
-    return { venues: DEFAULT_VENUES, enquiries: [] };
-  }
+/* ---------- Storage (MongoDB if MONGODB_URI is set, else local JSON file — see store.js) ---------- */
+async function loadData() {
+  const parsed = await store.load("wedding", { venues: DEFAULT_VENUES, enquiries: [] });
+  parsed.venues = (parsed.venues || []).map(withFacilityDefaults);
+  parsed.enquiries = parsed.enquiries || [];
+  return parsed;
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+async function saveData(data) {
+  return store.save("wedding", data);
 }
 
 function money(n) {
@@ -141,8 +134,8 @@ const enquiryLimiter = rateLimit({
 /* ---------- Routes ---------- */
 
 // Public: list curated venues
-router.get("/venues", (req, res) => {
-  const data = loadData();
+router.get("/venues", async (req, res) => {
+  const data = await loadData();
   res.json({ ok: true, venues: data.venues.map((v) => ({ ...v, startingPriceLabel: money(v.startingPrice) })) });
 });
 
@@ -160,7 +153,7 @@ router.post("/enquiry", enquiryLimiter, async (req, res) => {
     ? b.functionTypes.filter((f) => VALID_FUNCTION_TYPES.has(f))
     : [];
 
-  const data = loadData();
+  const data = await loadData();
   const enquiry = {
     id: `we-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     coupleNames: String(b.coupleNames).trim(),
@@ -179,7 +172,7 @@ router.post("/enquiry", enquiryLimiter, async (req, res) => {
   };
   data.enquiries.unshift(enquiry);
   data.enquiries = data.enquiries.slice(0, 500);
-  saveData(data);
+  await saveData(data);
 
   notifyTeam(enquiry); // fire-and-forget, never blocks the response
 
@@ -187,17 +180,17 @@ router.post("/enquiry", enquiryLimiter, async (req, res) => {
 });
 
 // Admin: view all enquiries
-router.get("/admin/enquiries", (req, res) => {
+router.get("/admin/enquiries", async (req, res) => {
   const adminKey = req.query.adminKey || req.headers["x-admin-key"];
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
   res.json({ ok: true, enquiries: data.enquiries });
 });
 
 // Admin: add a venue
-router.post("/venues", (req, res) => {
+router.post("/venues", async (req, res) => {
   const { adminKey, ...body } = req.body || {};
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
@@ -205,7 +198,7 @@ router.post("/venues", (req, res) => {
   if (!body.name || !body.destination) {
     return res.status(400).json({ error: "Name and destination are required." });
   }
-  const data = loadData();
+  const data = await loadData();
   const venue = {
     id: `wv-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     name: body.name,
@@ -225,7 +218,7 @@ router.post("/venues", (req, res) => {
     imageUrl: (body.imageUrl || "").trim(), // optional — blank falls back to the auto-generated AI photo
   };
   data.venues.unshift(venue);
-  saveData(data);
+  await saveData(data);
   res.json({ ok: true, venue });
 });
 
@@ -235,12 +228,12 @@ router.post("/venues", (req, res) => {
 // field is optional here; only what's actually sent gets updated, so
 // this doubles as a general "edit venue" endpoint without disturbing
 // anything above (add/delete/list all still work exactly as before).
-router.put("/venues/:id", (req, res) => {
+router.put("/venues/:id", async (req, res) => {
   const { adminKey, ...updates } = req.body || {};
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
   const venue = data.venues.find((v) => v.id === req.params.id);
   if (!venue) return res.status(404).json({ error: "Venue not found." });
 
@@ -258,19 +251,19 @@ router.put("/venues/:id", (req, res) => {
   if (updates.rating !== undefined && updates.rating !== "") venue.rating = Number(updates.rating) || venue.rating;
   if (updates.reviewCount !== undefined && updates.reviewCount !== "") venue.reviewCount = Number(updates.reviewCount) || venue.reviewCount;
 
-  saveData(data);
+  await saveData(data);
   res.json({ ok: true, venue });
 });
 
 // Admin: delete a venue
-router.delete("/venues/:id", (req, res) => {
+router.delete("/venues/:id", async (req, res) => {
   const { adminKey } = req.body || {};
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
   data.venues = data.venues.filter((v) => v.id !== req.params.id);
-  saveData(data);
+  await saveData(data);
   res.json({ ok: true });
 });
 

@@ -33,14 +33,12 @@
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const rateLimit = require("express-rate-limit");
 const nodemailer = require("nodemailer");
+const store = require("./store");
 
 const router = express.Router();
 
-const DATA_FILE = path.join(__dirname, "leads-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 
 const VALID_SOURCES = new Set([
@@ -55,18 +53,13 @@ const VALID_SOURCES = new Set([
 ]);
 const VALID_STATUSES = new Set(["new", "contacted", "converted", "closed"]);
 
-/* ---------- Storage (simple JSON file) ---------- */
-function loadData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return { leads: [] };
-  }
+/* ---------- Storage (MongoDB if MONGODB_URI is set, else local JSON file — see store.js) ---------- */
+async function loadData() {
+  return store.load("leads", { leads: [] });
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+async function saveData(data) {
+  return store.save("leads", data);
 }
 
 const isValidEmail = (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -140,7 +133,7 @@ router.post("/", leadLimiter, async (req, res) => {
     return res.status(400).json({ error: "Please enter a valid email." });
   }
 
-  const data = loadData();
+  const data = await loadData();
 
   // Soft duplicate guard: same email/phone submitting again within 10 minutes
   // is treated as the same enquiry, not a fresh lead (prevents double entries
@@ -154,7 +147,7 @@ router.post("/", leadLimiter, async (req, res) => {
   if (dupe) {
     dupe.message = b.message ? String(b.message).trim() : dupe.message;
     dupe.interest = b.interest || dupe.interest;
-    saveData(data);
+    await saveData(data);
     return res.json({ ok: true, leadId: dupe.id, deduped: true });
   }
 
@@ -182,7 +175,7 @@ router.post("/", leadLimiter, async (req, res) => {
 
   data.leads.unshift(lead);
   data.leads = data.leads.slice(0, 5000);
-  saveData(data);
+  await saveData(data);
 
   notifyTeam(lead); // fire-and-forget, never blocks the response
 
@@ -190,12 +183,12 @@ router.post("/", leadLimiter, async (req, res) => {
 });
 
 // Admin: view all leads + a quick source/status breakdown.
-router.get("/admin/all", (req, res) => {
+router.get("/admin/all", async (req, res) => {
   const adminKey = req.query.adminKey || req.headers["x-admin-key"];
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
-  const data = loadData();
+  const data = await loadData();
 
   const bySource = {};
   const byStatus = {};
@@ -208,7 +201,7 @@ router.get("/admin/all", (req, res) => {
 });
 
 // Admin: update a lead's status as the sales team works through the list.
-router.post("/admin/status", (req, res) => {
+router.post("/admin/status", async (req, res) => {
   const { adminKey, leadId, status } = req.body || {};
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
     return res.status(401).json({ error: "Invalid admin key." });
@@ -216,11 +209,11 @@ router.post("/admin/status", (req, res) => {
   if (!leadId || !VALID_STATUSES.has(status)) {
     return res.status(400).json({ error: "Valid leadId and status are required." });
   }
-  const data = loadData();
+  const data = await loadData();
   const lead = data.leads.find((l) => l.id === leadId);
   if (!lead) return res.status(404).json({ error: "Lead not found." });
   lead.status = status;
-  saveData(data);
+  await saveData(data);
   res.json({ ok: true, lead });
 });
 
