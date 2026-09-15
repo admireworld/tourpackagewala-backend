@@ -11,6 +11,23 @@
  * wedding.js — so posts survive restarts once MONGODB_URI is set, with
  * zero new dependencies.
  *
+ * CHANGED (quality/SEO fix): two related problems showed up together —
+ * a day where every AI text provider failed (Gemini rate-limited/retired
+ * model, Pollinations over budget) resulted in a placeholder post
+ * ("We're putting today's story together...") that STILL showed a
+ * "Source: en.wikipedia.org/..." link underneath it, as if a real,
+ * researched article was backing that placeholder. That's misleading to
+ * readers and looks like thin/low-quality content to search engines.
+ * Fixed two ways:
+ *   1) researchSourceUrl is now only ever attached when real AI-written
+ *      content was actually produced (raw is non-empty) — never on a
+ *      placeholder.
+ *   2) A placeholder is no longer saved as "today's post" at all. Instead
+ *      it's returned just for that one request, so the next visitor or
+ *      the next 30-minute retry tries generation again — meaning a
+ *      transient provider failure no longer locks in a low-quality post
+ *      for the rest of the day.
+ *
  * Mount this router in server.js with: app.use("/api/blog", require("./blog"));
  */
 
@@ -49,11 +66,7 @@ const TOPIC_POOL = [
   "Group tour vs customized trip — pros and cons",
 ];
 
-/* ---------- Storage (MongoDB-first via store.js, local-file fallback) ----------
- * CHANGED: was fs.readFileSync/writeFileSync on blog-data.json directly.
- * Now delegates to store.js, same as every other data type in this app.
- * Both functions are now async — every caller below awaits them.
- */
+/* ---------- Storage (MongoDB-first via store.js, local-file fallback) ---------- */
 async function loadData() {
   return store.load(STORE_NAME, DEFAULT_DATA);
 }
@@ -75,9 +88,6 @@ function pickAutoTopic(data) {
   return topic;
 }
 
-// NEW: normalize a title/topic for duplicate comparison — case/whitespace
-// insensitive, so "Bali vs Thailand" and "bali vs thailand " count as the
-// same post and never get a second copy.
 function normalizeForDupeCheck(text) {
   return String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -201,10 +211,6 @@ async function ensureTodaysPost() {
   const topic = (data.nextTopic && data.nextTopic.trim()) || pickAutoTopic(data);
   data.nextTopic = null; // consumed
 
-  // NEW: duplicate-title guard — if a post with this exact topic/title
-  // already exists anywhere in history, don't create a second one; log it
-  // and pick the next topic from the pool instead. Nothing existing is
-  // ever touched or removed.
   const normalizedTopic = normalizeForDupeCheck(topic);
   const alreadyExists = data.posts.some(
     (p) => normalizeForDupeCheck(p.topic) === normalizedTopic || normalizeForDupeCheck(p.title) === normalizedTopic
@@ -212,7 +218,7 @@ async function ensureTodaysPost() {
   if (alreadyExists) {
     console.warn(`blog: "${topic}" already published before — skipping duplicate, not replacing anything.`);
     await saveData(data); // persist the consumed nextTopic/topicCursor advance
-    return data.posts[0] || null; // most recent post stands as "today's" for the frontend
+    return data.posts[0] || null;
   }
 
   const keywordData = await researchKeywords(topic);
@@ -264,10 +270,35 @@ async function ensureTodaysPost() {
     content = `We're putting today's story together — check back shortly for our take on "${topic}".`;
   }
 
+  // NEW: if every AI provider failed today, don't persist a placeholder
+  // as "today's post" at all — a placeholder is not real, useful content
+  // and shouldn't count as a permanent published post or occupy today's
+  // date slot. Return it just for this one request instead, so the next
+  // visitor (or the 30-min background retry below) attempts generation
+  // again from scratch until it actually succeeds.
+  if (!raw) {
+    console.warn(`blog: all AI providers failed for "${topic}" — not persisting a placeholder, will retry.`);
+    return {
+      id: `pending-${key}`,
+      date: key,
+      topic,
+      title,
+      content,
+      imageUrl: null,
+      // No researchSourceUrl here either — nothing to cite for content
+      // that was never actually generated.
+      researchSourceUrl: null,
+      slug: slugify(title) || slugify(topic) || key,
+      metaTitle: `${title} | AdmireDworld Travel Blog`.slice(0, 65),
+      metaDescription: buildMetaDescription(content, topic),
+      keywords: [],
+      createdAt: new Date().toISOString(),
+    };
+  }
+
   // NEW: also guard on the FINAL generated title, in case the AI's title
   // wording happens to collide with an older post even though the seed
-  // topic differed (e.g. two different topics both producing "Kashmir in
-  // Winter: A Complete Guide").
+  // topic differed.
   const normalizedFinalTitle = normalizeForDupeCheck(title);
   const finalTitleAlreadyExists = data.posts.some(
     (p) => normalizeForDupeCheck(p.title) === normalizedFinalTitle
@@ -285,6 +316,10 @@ async function ensureTodaysPost() {
     title,
     content,
     imageUrl: await generateImageUrl(topic),
+    // CHANGED: only attach a research source when real AI-written content
+    // was actually produced (raw is guaranteed non-empty here, since the
+    // !raw branch above already returned). Never cite a source for a
+    // placeholder — that branch never reaches this line at all now.
     researchSourceUrl: research?.sourceUrl || null,
     slug: (() => {
       const base = slugify(title) || slugify(topic) || key;
@@ -300,9 +335,6 @@ async function ensureTodaysPost() {
     createdAt: new Date().toISOString(),
   };
 
-  // CHANGED: still unshift + cap at 60 (unchanged behaviour) — the ONLY
-  // thing that changed is WHERE this gets persisted (store.js -> MongoDB
-  // when configured, instead of a local file that Render wipes).
   data.posts.unshift(post);
   data.posts = data.posts.slice(0, 60);
   await saveData(data);
@@ -342,7 +374,6 @@ router.get("/latest", async (req, res) => {
   }
 });
 
-// CHANGED: was sync (loadData was sync before); now awaits the store.
 router.get("/list", async (req, res) => {
   try {
     const data = await loadData();
@@ -418,9 +449,6 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
-// CHANGED: generate-blog-pages.js used to import loadData() (sync) directly.
-// It's now async — update that script's call site to `await loadData()`
-// (or `store.load("blog", { posts: [] })` directly) if it isn't already.
 module.exports.loadData = loadData;
 
 /* ---------- Keep the blog reliably daily, even on a quiet day ---------- */
