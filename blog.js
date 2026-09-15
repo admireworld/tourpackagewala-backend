@@ -1,30 +1,16 @@
 /**
  * AdmireDworld Travel — AI Daily Blog module
  * -------------------------------------------
- * CHANGED (persistence fix): this used to store posts in a local
- * blog-data.json file. On Render's free tier, the disk is wiped on every
- * restart/redeploy/sleep-wake cycle, so posts were silently disappearing
- * (e.g. a Bali post vanishing the day a Kashmir post was generated) — it
- * wasn't an overwrite bug, the whole file was just gone.
- * Now uses the shared store.js (MongoDB-first, local-file fallback) —
- * the exact same pattern already used by bookings.js/leads.js/refer.js/
- * wedding.js — so posts survive restarts once MONGODB_URI is set, with
- * zero new dependencies.
- *
- * CHANGED (quality fix): a day where every AI text provider failed used
- * to save a placeholder post ("We're putting today's story together...")
- * as if it were a real, permanent post for that date. Now, if generation
- * fails, nothing is persisted — the placeholder is only returned for
- * that one request, so the next visitor or the next 30-minute retry
- * tries generating real content again instead of being stuck with a
- * low-quality post for the rest of the day.
- *
- * CHANGED (no more Wikipedia attribution on the blog): Wikipedia research
- * is still fetched and handed to the AI internally, purely to help it
- * write accurate, grounded articles (see researchBlock below) — but the
- * source URL is no longer attached to the saved post or exposed in any
- * API response. Readers of this travel agency's own blog should never
- * see a "Source: wikipedia.org" line under a post.
+ * Persists posts via store.js (MongoDB-first, local-file fallback) so
+ * posts survive Render restarts/redeploys.
+ * A failed generation is never saved as "today's post" — it's retried
+ * automatically instead of locking in a placeholder for the day.
+ * Wikipedia research is used only to help the AI write accurate
+ * articles — it is never shown to readers as a source/citation.
+ * Each post also carries relatedSlugs (last 3 other posts) for a
+ * "You might also like" section, and the prompt now explicitly asks
+ * for correct grammar/apostrophes (fixes things like "Keralas" instead
+ * of "Kerala's").
  *
  * Mount this router in server.js with: app.use("/api/blog", require("./blog"));
  */
@@ -40,7 +26,6 @@ const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const STORE_NAME = "blog";
 const DEFAULT_DATA = { posts: [], nextTopic: null, topicCursor: 0 };
 
-/* ---------- Fallback topic pool (used when no admin topic is queued) ---------- */
 const TOPIC_POOL = [
   "Best time of year to visit Kashmir",
   "Budget travel tips for a Kerala backwaters trip",
@@ -64,7 +49,6 @@ const TOPIC_POOL = [
   "Group tour vs customized trip — pros and cons",
 ];
 
-/* ---------- Storage (MongoDB-first via store.js, local-file fallback) ---------- */
 async function loadData() {
   return store.load(STORE_NAME, DEFAULT_DATA);
 }
@@ -74,10 +58,9 @@ async function saveData(data) {
 }
 
 function todayKey() {
-  // IST date, so "today" lines up with India-facing content
   const now = new Date();
   const ist = new Date(now.getTime() + (5.5 * 60 - now.getTimezoneOffset()) * 60000);
-  return ist.toISOString().slice(0, 10); // YYYY-MM-DD
+  return ist.toISOString().slice(0, 10);
 }
 
 function pickAutoTopic(data) {
@@ -90,11 +73,6 @@ function normalizeForDupeCheck(text) {
   return String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/* ---------- Lightweight fact research (free, no API key, no extra signup) ----------
- * Used ONLY to help the AI write a more accurate, grounded article (see
- * researchBlock in the prompt below). The result is never attached to
- * the saved post or shown to readers — no "Source: ..." line anywhere.
- */
 const RESEARCH_SKIP_KEYWORDS = [
   "film", "movie", "tv series", "television series", "web series",
   "documentary", "song", "album", "novel", "book", "video game",
@@ -140,8 +118,6 @@ async function researchTopic(topic) {
       const extract = (summaryData?.extract || "").trim();
       if (!extract) continue;
 
-      // NOTE: sourceUrl is still returned here (harmless — internal use
-      // only), but nothing downstream ever reads or saves it anymore.
       return {
         title,
         extract: extract.slice(0, 700),
@@ -156,7 +132,6 @@ async function researchTopic(topic) {
   }
 }
 
-/* ---------- Keyword research (free, no API key) ---------- */
 async function researchKeywords(topic) {
   const seeds = [topic, `${topic} tips`, `best ${topic}`, `${topic} itinerary`];
   const suggestions = new Set();
@@ -185,7 +160,6 @@ async function researchKeywords(topic) {
   return { primaryKeyword: topic, relatedKeywords };
 }
 
-/* ---------- Slug + meta helpers ---------- */
 function slugify(text) {
   return String(text || "")
     .toLowerCase()
@@ -204,7 +178,6 @@ function buildMetaDescription(content, topic) {
   return cut.slice(0, cut.lastIndexOf(" ")) + "…";
 }
 
-/* ---------- Core: generate today's post if it doesn't exist yet ---------- */
 async function ensureTodaysPost() {
   const data = await loadData();
   const key = todayKey();
@@ -213,7 +186,7 @@ async function ensureTodaysPost() {
   if (existing) return existing;
 
   const topic = (data.nextTopic && data.nextTopic.trim()) || pickAutoTopic(data);
-  data.nextTopic = null; // consumed
+  data.nextTopic = null;
 
   const normalizedTopic = normalizeForDupeCheck(topic);
   const alreadyExists = data.posts.some(
@@ -221,7 +194,7 @@ async function ensureTodaysPost() {
   );
   if (alreadyExists) {
     console.warn(`blog: "${topic}" already published before — skipping duplicate, not replacing anything.`);
-    await saveData(data); // persist the consumed nextTopic/topicCursor advance
+    await saveData(data);
     return data.posts[0] || null;
   }
 
@@ -246,6 +219,8 @@ async function ensureTodaysPost() {
     `AdmireDworld Travel, about: "${topic}". Give it a catchy title on the first ` +
     `line, then 4-6 short paragraphs. Friendly, practical tone, no markdown symbols. ` +
     `Ground the post in specific, accurate details rather than vague generalities. ` +
+    `Use correct English grammar and punctuation throughout — especially apostrophes ` +
+    `for possessives (e.g. "Kerala's backwaters", "India's coastline"), never drop them. ` +
     `Stay strictly on travel and tourism — destinations, itineraries, packing, ` +
     `visas, budgets, food, culture, best time to visit, etc. — and never drift into ` +
     `any unrelated subject, since this is a travel agency's blog. ` +
@@ -275,9 +250,6 @@ async function ensureTodaysPost() {
     content = `We're putting today's story together — check back shortly for our take on "${topic}".`;
   }
 
-  // If every AI provider failed today, don't persist a placeholder as
-  // "today's post" — return it just for this one request, so the next
-  // visitor or the next 30-min retry attempts real generation again.
   if (!raw) {
     console.warn(`blog: all AI providers failed for "${topic}" — not persisting a placeholder, will retry.`);
     return {
@@ -291,6 +263,7 @@ async function ensureTodaysPost() {
       metaTitle: `${title} | AdmireDworld Travel Blog`.slice(0, 65),
       metaDescription: buildMetaDescription(content, topic),
       keywords: [],
+      relatedSlugs: [],
       createdAt: new Date().toISOString(),
     };
   }
@@ -312,9 +285,6 @@ async function ensureTodaysPost() {
     title,
     content,
     imageUrl: await generateImageUrl(topic),
-    // CHANGED: no researchSourceUrl field at all anymore — research is
-    // used only to help write the article above; it's never exposed to
-    // readers as a "Source: ..." line.
     slug: (() => {
       const base = slugify(title) || slugify(topic) || key;
       const existingSlugs = new Set(data.posts.map((p) => p.slug));
@@ -326,16 +296,25 @@ async function ensureTodaysPost() {
     metaTitle: `${title} | AdmireDworld Travel Blog`.slice(0, 65),
     metaDescription: buildMetaDescription(content, topic),
     keywords: keywordData.relatedKeywords,
+    // NEW: up to 3 most recent OTHER posts' slugs, for a "You might also
+    // like" section — internal linking helps Google crawl/rank the blog
+    // as a connected set of pages rather than isolated one-off posts.
+    relatedSlugs: data.posts.slice(0, 3).map((p) => p.slug),
     createdAt: new Date().toISOString(),
   };
 
   data.posts.unshift(post);
   data.posts = data.posts.slice(0, 60);
   await saveData(data);
+
+  // NEW: ping search engines that the sitemap has fresh content, so new
+  // posts get discovered/crawled faster instead of waiting for the next
+  // scheduled crawl. Fire-and-forget — never blocks or fails the request.
+  pingSitemapToSearchEngines();
+
   return post;
 }
 
-/* ---------- Rate limiting for the admin endpoints ---------- */
 const setTopicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -356,7 +335,22 @@ function isAdminAuthed(req) {
   return key === ADMIN_KEY;
 }
 
-/* ---------- Routes ---------- */
+// NEW: best-effort ping to Google + Bing telling them the sitemap changed.
+// SITE_URL must point at your public frontend domain, e.g.
+// https://www.tourpackagewala.in — set it as an env var so this works
+// without editing code if the domain ever changes.
+const SITE_URL = process.env.SITE_URL || "";
+function pingSitemapToSearchEngines() {
+  if (!SITE_URL) return; // not configured — silently skip, nothing breaks
+  const sitemapUrl = `${SITE_URL.replace(/\/$/, "")}/sitemap.xml`;
+  const targets = [
+    `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`,
+    `https://www.bing.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`,
+  ];
+  for (const url of targets) {
+    fetch(url).catch((err) => console.error("blog: sitemap ping failed (non-fatal):", err.message));
+  }
+}
 
 router.get("/latest", async (req, res) => {
   try {
@@ -445,7 +439,6 @@ router.get("/:id", async (req, res) => {
 module.exports = router;
 module.exports.loadData = loadData;
 
-/* ---------- Keep the blog reliably daily, even on a quiet day ---------- */
 setInterval(() => {
   ensureTodaysPost().catch((err) => console.error("blog: scheduled generation failed:", err.message));
 }, 30 * 60 * 1000).unref();
