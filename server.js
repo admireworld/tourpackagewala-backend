@@ -161,6 +161,11 @@ app.use("/api/settings", require("./settings"));
    rotate its API key from the dashboard, no code change/redeploy needed) --- */
 app.use("/api/ai-settings", require("./ai-settings"));
 
+/* ---------- Real Google Reviews (NEW feature — see reviews.js; replaces
+   the hardcoded fake homepage testimonials with live reviews fetched from
+   this business's actual Google Business Profile, cached via store.js) --- */
+app.use("/api/reviews", require("./reviews"));
+
 /* ---------- Permanent storage check (new — see db.js/store.js) ----------
    Bookings, leads, referral earnings, and wedding enquiries/venues are
    real customer data. This module lets them live in a free MongoDB Atlas
