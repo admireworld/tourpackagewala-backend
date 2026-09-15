@@ -125,29 +125,74 @@ function pickAutoTopic(data) {
  * If the lookup fails for any reason, generation still proceeds exactly as
  * before — this is a pure best-effort addition, nothing else changes.
  */
+// Wikipedia search sometimes matches an off-topic page instead of the
+// actual place/subject — e.g. searching "Kashmir" can return "The
+// Kashmir Files" (a film) ahead of the region itself. Linking a travel
+// blog post to an unrelated, and in that particular case politically
+// sensitive, film page is bad for both SEO topical relevance and the
+// brand. This list of description keywords flags pages that are about
+// media/entertainment/publications rather than a real-world place,
+// event, or activity, so they can be skipped in favour of the next
+// search result.
+const RESEARCH_SKIP_KEYWORDS = [
+  "film", "movie", "tv series", "television series", "web series",
+  "documentary", "song", "album", "novel", "book", "video game",
+  "actor", "actress", "musician", "singer", "band",
+];
+
+function looksOffTopicForTravel(description) {
+  const text = String(description || "").toLowerCase();
+  return RESEARCH_SKIP_KEYWORDS.some((kw) => text.includes(kw));
+}
+
 async function researchTopic(topic) {
   try {
     const searchUrl =
       `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=` +
-      `${encodeURIComponent(topic)}&format=json&srlimit=1&origin=*`;
+      `${encodeURIComponent(topic)}&format=json&srlimit=5&origin=*`;
     const searchResp = await fetch(searchUrl);
     const searchData = await searchResp.json();
-    const title = searchData?.query?.search?.[0]?.title;
-    if (!title) return null;
+    const results = searchData?.query?.search || [];
+    if (!results.length) return null;
 
-    const summaryResp = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-    );
-    if (!summaryResp.ok) return null;
-    const summaryData = await summaryResp.json();
-    const extract = (summaryData?.extract || "").trim();
-    if (!extract) return null;
+    // Check each candidate in order and use the first one that's
+    // actually about a real-world place/subject, not a film, show,
+    // song, book, etc. that happens to share the same name.
+    for (const result of results) {
+      const title = result?.title;
+      if (!title) continue;
 
-    return {
-      title,
-      extract: extract.slice(0, 700),
-      sourceUrl: summaryData?.content_urls?.desktop?.page || null,
-    };
+      let summaryData;
+      try {
+        const summaryResp = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
+        );
+        if (!summaryResp.ok) continue;
+        summaryData = await summaryResp.json();
+      } catch {
+        continue;
+      }
+
+      const description = summaryData?.description || "";
+      if (looksOffTopicForTravel(description)) {
+        console.warn(`blog: skipping off-topic Wikipedia match "${title}" (${description}) for research on "${topic}"`);
+        continue;
+      }
+
+      const extract = (summaryData?.extract || "").trim();
+      if (!extract) continue;
+
+      return {
+        title,
+        extract: extract.slice(0, 700),
+        sourceUrl: summaryData?.content_urls?.desktop?.page || null,
+      };
+    }
+
+    // None of the top candidates looked like a genuine match — proceed
+    // without a research source rather than risk citing something
+    // irrelevant or reputationally awkward.
+    return null;
   } catch (err) {
     console.error("blog: research lookup failed (continuing without it):", err.message);
     return null;
