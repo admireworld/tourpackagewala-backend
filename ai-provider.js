@@ -52,6 +52,32 @@
  *     just won't survive the next restart/deploy — which is exactly why
  *     the env vars above are the recommended long-term source of truth.
  *
+ * -------------------------------------------------------------------
+ * FIX (this update) — Pollinations error text was being published as
+ * a real blog post:
+ * -------------------------------------------------------------------
+ * generateTextPollinations() previously read the response body and
+ * returned it as-is, with no res.ok check and no sanity check on the
+ * content. When Pollinations' own free tier is over budget, it responds
+ * with HTTP 200 and a plain-text error message in the body (e.g. "The
+ * API key used for this request has reached its budget..."). Because
+ * that response looked like a normal 200 OK with text in it, it was
+ * treated as a valid AI-written article and published as-is — including
+ * as the post TITLE, since blog.js takes the first line as the title.
+ *
+ * This is now fixed two ways:
+ *   1) generateTextPollinations() checks resp.ok and throws on failure,
+ *      exactly like the Gemini/OpenAI helpers already did.
+ *   2) It also checks the returned text against a small set of known
+ *      Pollinations/provider error phrases and throws if matched, even
+ *      on a 200 status — so a "successful" but bogus response can never
+ *      be mistaken for real article text.
+ * With this fix, if EVERY provider fails (admin-selected one AND the
+ * Pollinations fallback), generateText() throws, blog.js's raw stays
+ * empty, and the post falls back to the existing safe placeholder text
+ * ("We're putting today's story together...") instead of ever
+ * publishing an error message as a real post.
+ *
  * Supported text providers: "pollinations" (free, default) | "gemini" | "openai"
  * Supported image providers: "pollinations" (free, AI-generated, default) |
  *   "pexels" (real travel stock photos, needs a free Pexels API key)
@@ -146,10 +172,47 @@ function updateSettings(partial) {
   return getSettings();
 }
 
+/* ---------- Guard against provider error text masquerading as content ----------
+ * Some free/limited providers respond with HTTP 200 and a plain-text
+ * error message in the body instead of a proper error status. This
+ * checks a generated string against a few known patterns and throws
+ * if it looks like an error rather than real article text, so it can
+ * never be published as a blog post.
+ */
+const ERROR_TEXT_PATTERNS = [
+  /reached its budget/i,
+  /rate limit/i,
+  /quota exceeded/i,
+  /api key .* invalid/i,
+  /invalid api key/i,
+  /unauthorized/i,
+  /raise the key budget/i,
+];
+
+function looksLikeProviderError(text) {
+  const sample = String(text || "").slice(0, 300);
+  return ERROR_TEXT_PATTERNS.some((re) => re.test(sample));
+}
+
 /* ---------- Pollinations (free, no key — the guaranteed-to-work fallback) ---------- */
 async function generateTextPollinations(prompt) {
   const resp = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`);
-  return (await resp.text()).trim();
+  const text = (await resp.text()).trim();
+
+  if (!resp.ok) {
+    throw new Error(`Pollinations text generation failed (${resp.status}): ${text.slice(0, 200)}`);
+  }
+  if (!text) {
+    throw new Error("Pollinations text generation returned an empty response.");
+  }
+  if (looksLikeProviderError(text)) {
+    // Looks like a 200 OK carrying an error message in the body (e.g. a
+    // budget/quota notice) rather than real article text — treat it as
+    // a failure so it never gets published as a post.
+    throw new Error(`Pollinations returned an error message instead of content: ${text.slice(0, 200)}`);
+  }
+
+  return text;
 }
 
 function generateImageUrlPollinations(prompt) {
@@ -209,6 +272,12 @@ async function generateTextGemini(prompt, apiKey) {
   }
   const data = await resp.json();
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+  if (!text.trim()) {
+    // 200 OK but no usable text — e.g. blocked by a safety filter, or an
+    // unexpected response shape. Treat as a failure so it falls back
+    // instead of publishing nothing/garbage.
+    throw new Error(`Gemini returned an empty response (possibly blocked or malformed): ${JSON.stringify(data).slice(0, 200)}`);
+  }
   return text.trim();
 }
 
@@ -239,7 +308,10 @@ async function generateTextOpenAI(prompt, apiKey) {
  * for any reason (bad key, quota, network), it automatically falls
  * back to the free Pollinations provider instead of throwing — so a
  * missing/bad/expired key can never stop the daily blog or weekly
- * package from being generated.
+ * package from being generated. If Pollinations ALSO fails (or returns
+ * an error message instead of real text — see the guard above),
+ * generateText() throws, and blog.js's existing safe placeholder text
+ * kicks in instead of ever publishing an error message as a post.
  */
 async function generateText(prompt) {
   const settings = getSettings();
