@@ -38,10 +38,13 @@
  *   SEO title, and meta description are also generated and saved with
  *   each post (extra fields only — nothing existing is removed), ready
  *   for whenever individual blog post pages are built on the frontend.
+ * - ADMIN DELETE (new): admin can permanently delete a specific post via
+ *   DELETE /api/blog/:id from the Admin Dashboard. Protected by
+ *   ADMIN_KEY, same as every other admin endpoint in this project.
  *
  * Env vars used (all optional — see ai-provider.js for the AI provider/key,
  * which is normally managed from the Admin Dashboard instead):
- *   ADMIN_KEY            -> secret to protect the "set topic" endpoint
+ *   ADMIN_KEY            -> secret to protect the "set topic" / "delete" endpoints
  */
 
 const express = require("express");
@@ -313,13 +316,27 @@ async function ensureTodaysPost() {
   return post;
 }
 
-/* ---------- Rate limiting for the admin endpoint ---------- */
+/* ---------- Rate limiting for the admin endpoints ---------- */
 const setTopicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const deletePostLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/* ---------- Shared admin-key check ---------- */
+function isAdminAuthed(req) {
+  const key = req.headers["x-admin-key"] || req.query.adminKey || req.body?.adminKey;
+  if (!ADMIN_KEY) return true; // no key configured on the server -> admin routes are open (matches existing behaviour)
+  return key === ADMIN_KEY;
+}
 
 /* ---------- Routes ---------- */
 
@@ -340,22 +357,15 @@ router.get("/list", (req, res) => {
   res.json({ ok: true, posts: data.posts.slice(0, 30) });
 });
 
-// Public: single post by id
-router.get("/:id", (req, res) => {
-  const data = loadData();
-  const post = data.posts.find((p) => p.id === req.params.id);
-  if (!post) return res.status(404).json({ error: "Post not found." });
-  res.json({ ok: true, post });
-});
-
 // Admin: export ALL saved posts as plain JSON.
-// NEW — added so a separate frontend repo's CI (GitHub Action) can fetch
+// Added so a separate frontend repo's CI (GitHub Action) can fetch
 // today's post data over HTTP and build the static /blog/<slug>.html pages,
 // without needing filesystem access to this server's blog-data.json.
 // Protected by ADMIN_KEY, same as every other admin endpoint in this project.
+// NOTE: this must be defined BEFORE the "/:id" route below, otherwise
+// Express would try to treat "admin" as an :id value.
 router.get("/admin/export", (req, res) => {
-  const adminKey = req.query.adminKey || req.headers["x-admin-key"];
-  if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
+  if (!isAdminAuthed(req)) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
   const data = loadData();
@@ -365,8 +375,8 @@ router.get("/admin/export", (req, res) => {
 // Admin: queue a topic for the NEXT auto-generated post.
 // Protected by ADMIN_KEY (set this env var on your host).
 router.post("/set-topic", setTopicLimiter, (req, res) => {
-  const { topic, adminKey } = req.body || {};
-  if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
+  const { topic } = req.body || {};
+  if (!isAdminAuthed(req)) {
     return res.status(401).json({ error: "Invalid admin key." });
   }
   if (!topic || !topic.trim()) {
@@ -376,6 +386,34 @@ router.post("/set-topic", setTopicLimiter, (req, res) => {
   data.nextTopic = topic.trim();
   saveData(data);
   res.json({ ok: true, queuedTopic: data.nextTopic });
+});
+
+// Admin: permanently delete a specific post by id.
+// Protected by ADMIN_KEY, same pattern as every other admin endpoint here.
+// Matches what the Admin Dashboard's "Delete" button on the blog list calls.
+router.delete("/:id", deletePostLimiter, (req, res) => {
+  if (!isAdminAuthed(req)) {
+    return res.status(401).json({ error: "Invalid admin key." });
+  }
+  const { id } = req.params;
+  const data = loadData();
+  const idx = data.posts.findIndex((p) => String(p.id) === String(id));
+  if (idx === -1) {
+    return res.status(404).json({ error: "Post not found." });
+  }
+  const [removed] = data.posts.splice(idx, 1);
+  saveData(data);
+  res.json({ ok: true, deletedId: removed.id });
+});
+
+// Public: single post by id.
+// NOTE: kept LAST among the "/:id"-shaped routes so it never intercepts
+// "/admin/export", "/list", or "/latest" above.
+router.get("/:id", (req, res) => {
+  const data = loadData();
+  const post = data.posts.find((p) => p.id === req.params.id);
+  if (!post) return res.status(404).json({ error: "Post not found." });
+  res.json({ ok: true, post });
 });
 
 module.exports = router;
