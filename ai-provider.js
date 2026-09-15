@@ -53,8 +53,8 @@
  *     the env vars above are the recommended long-term source of truth.
  *
  * -------------------------------------------------------------------
- * FIX (this update) — Pollinations error text was being published as
- * a real blog post:
+ * FIX #1 — Pollinations error text was being published as a real
+ * blog post:
  * -------------------------------------------------------------------
  * generateTextPollinations() previously read the response body and
  * returned it as-is, with no res.ok check and no sanity check on the
@@ -77,6 +77,21 @@
  * empty, and the post falls back to the existing safe placeholder text
  * ("We're putting today's story together...") instead of ever
  * publishing an error message as a real post.
+ *
+ * -------------------------------------------------------------------
+ * FIX #2 — Gemini model name got retired ("gemini-2.5-flash is no
+ * longer available to new users"):
+ * -------------------------------------------------------------------
+ * Every Gemini call was hardcoded to a single model ID
+ * (models/gemini-2.5-flash). When Google retired that model for new
+ * users, every call returned HTTP 404, generateText() silently fell
+ * back to Pollinations, and — combined with fix #1 not existing yet at
+ * the time — that fallback's own budget-error text got published.
+ * Instead of hardcoding one model name, generateTextGemini() now tries
+ * a short ordered list of candidate model IDs (GEMINI_MODEL_CANDIDATES
+ * below) and uses the first one that actually works. If Google renames
+ * or retires the current default again in future, just update that
+ * list — no other code changes needed.
  *
  * Supported text providers: "pollinations" (free, default) | "gemini" | "openai"
  * Supported image providers: "pollinations" (free, AI-generated, default) |
@@ -251,10 +266,22 @@ async function generateImageUrlPexels(prompt, apiKey) {
  * Uses the new-format "AQ." authentication keys (Google's current key
  * type — see https://ai.google.dev/gemini-api/docs/api-key), sent via
  * the x-goog-api-key header, exactly as Google's docs specify.
+ *
+ * See FIX #2 in the file header comment above: instead of a single
+ * hardcoded model ID, this tries a short ordered list of candidates
+ * and uses the first one that actually responds successfully. This
+ * makes the integration resilient to Google renaming/retiring a
+ * specific model ID again in the future.
  */
-async function generateTextGemini(prompt, apiKey) {
+const GEMINI_MODEL_CANDIDATES = [
+  "gemini-3.6-flash",     // current recommended model (per Google's own 404 guidance)
+  "gemini-flash-latest",  // Google's "always current" alias, when available
+  "gemini-2.5-flash",     // older model, kept as a last-resort fallback
+];
+
+async function callGeminiModel(model, prompt, apiKey) {
   const resp = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -268,7 +295,7 @@ async function generateTextGemini(prompt, apiKey) {
   );
   if (!resp.ok) {
     const errText = await resp.text().catch(() => "");
-    throw new Error(`Gemini text generation failed (${resp.status}): ${errText.slice(0, 200)}`);
+    throw new Error(`Gemini (${model}) text generation failed (${resp.status}): ${errText.slice(0, 200)}`);
   }
   const data = await resp.json();
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
@@ -276,9 +303,25 @@ async function generateTextGemini(prompt, apiKey) {
     // 200 OK but no usable text — e.g. blocked by a safety filter, or an
     // unexpected response shape. Treat as a failure so it falls back
     // instead of publishing nothing/garbage.
-    throw new Error(`Gemini returned an empty response (possibly blocked or malformed): ${JSON.stringify(data).slice(0, 200)}`);
+    throw new Error(`Gemini (${model}) returned an empty response (possibly blocked or malformed): ${JSON.stringify(data).slice(0, 200)}`);
   }
   return text.trim();
+}
+
+async function generateTextGemini(prompt, apiKey) {
+  const errors = [];
+  for (const model of GEMINI_MODEL_CANDIDATES) {
+    try {
+      return await callGeminiModel(model, prompt, apiKey);
+    } catch (err) {
+      errors.push(err.message);
+      console.error(
+        `ai-provider: Gemini model "${model}" failed, trying next candidate if any:`,
+        err.message
+      );
+    }
+  }
+  throw new Error(`All Gemini model candidates failed: ${errors.join(" | ")}`);
 }
 
 /* ---------- OpenAI (unchanged behaviour from before, just relocated here) ---------- */
