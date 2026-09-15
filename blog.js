@@ -11,22 +11,20 @@
  * wedding.js — so posts survive restarts once MONGODB_URI is set, with
  * zero new dependencies.
  *
- * CHANGED (quality/SEO fix): two related problems showed up together —
- * a day where every AI text provider failed (Gemini rate-limited/retired
- * model, Pollinations over budget) resulted in a placeholder post
- * ("We're putting today's story together...") that STILL showed a
- * "Source: en.wikipedia.org/..." link underneath it, as if a real,
- * researched article was backing that placeholder. That's misleading to
- * readers and looks like thin/low-quality content to search engines.
- * Fixed two ways:
- *   1) researchSourceUrl is now only ever attached when real AI-written
- *      content was actually produced (raw is non-empty) — never on a
- *      placeholder.
- *   2) A placeholder is no longer saved as "today's post" at all. Instead
- *      it's returned just for that one request, so the next visitor or
- *      the next 30-minute retry tries generation again — meaning a
- *      transient provider failure no longer locks in a low-quality post
- *      for the rest of the day.
+ * CHANGED (quality fix): a day where every AI text provider failed used
+ * to save a placeholder post ("We're putting today's story together...")
+ * as if it were a real, permanent post for that date. Now, if generation
+ * fails, nothing is persisted — the placeholder is only returned for
+ * that one request, so the next visitor or the next 30-minute retry
+ * tries generating real content again instead of being stuck with a
+ * low-quality post for the rest of the day.
+ *
+ * CHANGED (no more Wikipedia attribution on the blog): Wikipedia research
+ * is still fetched and handed to the AI internally, purely to help it
+ * write accurate, grounded articles (see researchBlock below) — but the
+ * source URL is no longer attached to the saved post or exposed in any
+ * API response. Readers of this travel agency's own blog should never
+ * see a "Source: wikipedia.org" line under a post.
  *
  * Mount this router in server.js with: app.use("/api/blog", require("./blog"));
  */
@@ -92,7 +90,11 @@ function normalizeForDupeCheck(text) {
   return String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/* ---------- Lightweight fact research (free, no API key, no extra signup) ---------- */
+/* ---------- Lightweight fact research (free, no API key, no extra signup) ----------
+ * Used ONLY to help the AI write a more accurate, grounded article (see
+ * researchBlock in the prompt below). The result is never attached to
+ * the saved post or shown to readers — no "Source: ..." line anywhere.
+ */
 const RESEARCH_SKIP_KEYWORDS = [
   "film", "movie", "tv series", "television series", "web series",
   "documentary", "song", "album", "novel", "book", "video game",
@@ -138,6 +140,8 @@ async function researchTopic(topic) {
       const extract = (summaryData?.extract || "").trim();
       if (!extract) continue;
 
+      // NOTE: sourceUrl is still returned here (harmless — internal use
+      // only), but nothing downstream ever reads or saves it anymore.
       return {
         title,
         extract: extract.slice(0, 700),
@@ -233,7 +237,8 @@ async function ensureTodaysPost() {
   const researchBlock = research
     ? `\n\nHere are some verified, factual notes on the subject (from Wikipedia) — ` +
       `use only the parts genuinely relevant to "${topic}", rephrase everything in ` +
-      `your own words, and do not copy any sentence as-is:\n"${research.extract}"\n`
+      `your own words, and do not copy any sentence as-is. Do not mention Wikipedia ` +
+      `or cite any source by name anywhere in the article — just use the facts:\n"${research.extract}"\n`
     : "";
 
   const articlePrompt =
@@ -270,12 +275,9 @@ async function ensureTodaysPost() {
     content = `We're putting today's story together — check back shortly for our take on "${topic}".`;
   }
 
-  // NEW: if every AI provider failed today, don't persist a placeholder
-  // as "today's post" at all — a placeholder is not real, useful content
-  // and shouldn't count as a permanent published post or occupy today's
-  // date slot. Return it just for this one request instead, so the next
-  // visitor (or the 30-min background retry below) attempts generation
-  // again from scratch until it actually succeeds.
+  // If every AI provider failed today, don't persist a placeholder as
+  // "today's post" — return it just for this one request, so the next
+  // visitor or the next 30-min retry attempts real generation again.
   if (!raw) {
     console.warn(`blog: all AI providers failed for "${topic}" — not persisting a placeholder, will retry.`);
     return {
@@ -285,9 +287,6 @@ async function ensureTodaysPost() {
       title,
       content,
       imageUrl: null,
-      // No researchSourceUrl here either — nothing to cite for content
-      // that was never actually generated.
-      researchSourceUrl: null,
       slug: slugify(title) || slugify(topic) || key,
       metaTitle: `${title} | AdmireDworld Travel Blog`.slice(0, 65),
       metaDescription: buildMetaDescription(content, topic),
@@ -296,9 +295,6 @@ async function ensureTodaysPost() {
     };
   }
 
-  // NEW: also guard on the FINAL generated title, in case the AI's title
-  // wording happens to collide with an older post even though the seed
-  // topic differed.
   const normalizedFinalTitle = normalizeForDupeCheck(title);
   const finalTitleAlreadyExists = data.posts.some(
     (p) => normalizeForDupeCheck(p.title) === normalizedFinalTitle
@@ -316,11 +312,9 @@ async function ensureTodaysPost() {
     title,
     content,
     imageUrl: await generateImageUrl(topic),
-    // CHANGED: only attach a research source when real AI-written content
-    // was actually produced (raw is guaranteed non-empty here, since the
-    // !raw branch above already returned). Never cite a source for a
-    // placeholder — that branch never reaches this line at all now.
-    researchSourceUrl: research?.sourceUrl || null,
+    // CHANGED: no researchSourceUrl field at all anymore — research is
+    // used only to help write the article above; it's never exposed to
+    // readers as a "Source: ..." line.
     slug: (() => {
       const base = slugify(title) || slugify(topic) || key;
       const existingSlugs = new Set(data.posts.map((p) => p.slug));
