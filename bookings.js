@@ -256,6 +256,7 @@ router.post("/admin/confirm", async (req, res) => {
         refereeEmail: booking.user.email,
         bookingId: booking.id,
         bookingItemName: booking.itemName,
+        bookingDestination: booking.destination,
         bookingAmount: booking.amount,
       });
     } catch (err) {
