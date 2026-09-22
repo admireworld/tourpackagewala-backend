@@ -32,6 +32,22 @@
  *   e.g. GST) is applied on top of hotel + sightseeing + transfers + visa in
  *   computeQuote(). It is NEVER shown to the customer as a separate figure —
  *   it is baked into the one combined total, same as every other item here.
+ * - Margin (NEW, additive): a second admin-configurable percentage
+ *   (`settings.marginPercentage`, e.g. "20" = 20%) is the agency's own
+ *   markup on top of the base cost (hotel + sightseeing + transfers + visa),
+ *   applied BEFORE tax so tax is charged on the final selling price:
+ *     costWithMargin = baseCost + (baseCost * marginPercentage / 100)
+ *     total           = costWithMargin + (costWithMargin * taxPercent / 100)
+ *   Defaults to 0 for every existing/not-yet-set store (see loadData()'s
+ *   backfill below), so marginPercentage=0 reproduces the exact old total —
+ *   nothing changes for this project until an admin explicitly sets it >0
+ *   from Admin Dashboard -> Customize Package -> Tax & Margin.
+ *   Never shown to the customer as a separate figure, same as tax.
+ * - Children (NEW, additive): POST /api/customize/enquiry now also accepts
+ *   an optional `children` array (up to 4, each `{ age }` with age 0-11).
+ *   It is validated/sanitized server-side and saved on the enquiry purely
+ *   for the team's records — it is NEVER passed into computeQuote() and
+ *   NEVER changes `total`/`travellers`/the price shown to the customer.
  *
  * Env vars used (all already used elsewhere in this project, none new):
  *   ADMIN_KEY, EMAIL_SERVICE, EMAIL_USER, EMAIL_PASS
@@ -40,11 +56,12 @@
  * ---------
  *   GET    /api/customize/options              -> destinations + items (NO prices)
  *   POST   /api/customize/quote                 -> { total } for a given selection
- *   POST   /api/customize/enquiry                -> submit the final customize request
+ *   POST   /api/customize/enquiry                -> submit the final customize request (name/phone/email/
+ *                                                    destination/selection required; optional children[])
  *
  *   GET    /api/customize/admin/all              -> everything WITH prices + tax settings (admin only)
  *   GET    /api/customize/admin/enquiries        -> submitted requests (admin only)
- *   PUT    /api/customize/settings                -> update taxPercent (admin only)
+ *   PUT    /api/customize/settings                -> update taxPercent and/or marginPercentage (admin only)
  *
  *   POST   /api/customize/hotels                 -> add a hotel        (admin)
  *   PUT    /api/customize/hotels/:id              -> edit a hotel       (admin)
@@ -71,6 +88,8 @@ const router = express.Router();
 const DATA_FILE = path.join(__dirname, "customize-data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const DEFAULT_TAX_PERCENT = 5; // GST/service tax %, admin-editable via PUT /api/customize/settings
+const DEFAULT_MARGIN_PERCENT = 0; // agency's own markup %, admin-editable via PUT /api/customize/settings —
+// 0 means "unchanged" so every existing package/store keeps showing the exact same price until an admin sets it
 
 /* ---------- Seed data (admin can add/edit/delete all of this from the backend) ---------- */
 const SEED_DATA = {
@@ -139,6 +158,9 @@ function loadData() {
     const parsed = JSON.parse(raw);
     // Backfill settings for data files saved before taxPercent existed.
     if (!parsed.settings) parsed.settings = { taxPercent: DEFAULT_TAX_PERCENT };
+    // Backfill marginPercentage for stores saved before this field existed —
+    // defaults to 0, which keeps the total exactly the same as before.
+    if (parsed.settings.marginPercentage === undefined) parsed.settings.marginPercentage = DEFAULT_MARGIN_PERCENT;
     return parsed;
   } catch {
     return {
@@ -147,14 +169,15 @@ function loadData() {
       transfers: SEED_DATA.transfers.map((i) => ({ ...i })),
       visas: SEED_DATA.visas.map((i) => ({ ...i })),
       enquiries: [],
-      settings: { taxPercent: DEFAULT_TAX_PERCENT },
+      settings: { taxPercent: DEFAULT_TAX_PERCENT, marginPercentage: DEFAULT_MARGIN_PERCENT },
     };
   }
 }
 
 function saveData(data) {
   // Backfill settings for data files saved before taxPercent existed.
-  if (!data.settings) data.settings = { taxPercent: DEFAULT_TAX_PERCENT };
+  if (!data.settings) data.settings = { taxPercent: DEFAULT_TAX_PERCENT, marginPercentage: DEFAULT_MARGIN_PERCENT };
+  if (data.settings.marginPercentage === undefined) data.settings.marginPercentage = DEFAULT_MARGIN_PERCENT;
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
 }
 
@@ -189,10 +212,12 @@ async function notifyTeam(enquiry) {
       subject: `New customize package request — ${enquiry.destination || "Trip"}`,
       text:
         `Destination: ${enquiry.destination}\nDuration: ${enquiry.duration}\nTravellers: ${enquiry.travellers}\n` +
+        `Children: ${enquiry.children && enquiry.children.length ? enquiry.children.map((c) => `${c.age} yrs`).join(", ") : "None"}\n` +
         `Hotel: ${enquiry.breakdown.hotel ? enquiry.breakdown.hotel.name + " (" + money(enquiry.breakdown.hotel.price) + ")" : "-"}\n` +
         `Sightseeing: ${enquiry.breakdown.sightseeing.map((s) => `${s.name} (${money(s.price)})`).join(", ") || "-"}\n` +
         `Pickup/Drop: ${enquiry.breakdown.transfers.map((s) => `${s.name} (${money(s.price)})`).join(", ") || "-"}\n` +
         `Visa: ${enquiry.breakdown.visas.map((s) => `${s.name} (${money(s.price)})`).join(", ") || "-"}\n` +
+        `Margin (${enquiry.breakdown.margin.percent}%): ${money(enquiry.breakdown.margin.amount)}\n` +
         `Taxes & fees (${enquiry.breakdown.tax.percent}%): ${money(enquiry.breakdown.tax.amount)}\n` +
         `Estimated total: ${money(enquiry.total)}\n\n` +
         `Contact: ${enquiry.name} · ${enquiry.phone} · ${enquiry.email}\nNotes: ${enquiry.notes || "-"}`,
@@ -234,17 +259,31 @@ function computeQuote(data, { hotelId, sightseeingIds, transferIds, visaIds, tra
   transfers.forEach((t) => { subtotal += t.price * travellerCount; });
   visas.forEach((v) => { subtotal += v.price * travellerCount; });
 
+  // Margin (NEW) — the agency's own markup, a single admin-set percentage
+  // applied on top of the base cost above, BEFORE tax (so tax is charged on
+  // the final selling price, not the raw cost). Defaults to 0 for any store
+  // that hasn't set it (see loadData()/saveData() backfills), in which case
+  // costWithMargin === subtotal and nothing below changes vs. before this
+  // feature existed. Kept out of the customer-facing breakdown, same as tax.
+  const marginPercent = Number(data.settings?.marginPercentage) || 0;
+  const marginAmount = Math.round(subtotal * (marginPercent / 100));
+  const costWithMargin = subtotal + marginAmount;
+
   // Taxes & fees (e.g. GST) — a single admin-set percentage applied on top
-  // of everything above. Kept out of the customer-facing breakdown; only
-  // ever reflected inside the one combined total.
+  // of the base cost + margin above. Kept out of the customer-facing
+  // breakdown; only ever reflected inside the one combined total.
   const taxPercent = Number(data.settings?.taxPercent) || 0;
-  const taxAmount = Math.round(subtotal * (taxPercent / 100));
-  const total = subtotal + taxAmount;
+  const taxAmount = Math.round(costWithMargin * (taxPercent / 100));
+  const total = costWithMargin + taxAmount;
 
   return {
     total,
     travellers: travellerCount,
-    breakdown: { hotel, sightseeing, transfers, visas, tax: { percent: taxPercent, amount: taxAmount } },
+    breakdown: {
+      hotel, sightseeing, transfers, visas,
+      margin: { percent: marginPercent, amount: marginAmount },
+      tax: { percent: taxPercent, amount: taxAmount },
+    },
   };
 }
 
@@ -300,7 +339,21 @@ router.post("/enquiry", enquiryLimiter, async (req, res) => {
     transferIds: b.transferIds,
     visaIds: b.visaIds,
     travellers: b.travellers,
+    // NOTE: children is intentionally NOT passed to computeQuote() — total
+    // is driven purely by "travellers" (adults) + the selected hotel/
+    // sightseeing/transfers/visa. Children never change the price.
   });
+
+  // Children (NEW, additive) — informational only, saved for the team but
+  // never used in pricing. Re-validated server-side (never trusted as-is
+  // from the browser): capped at 4, each age must be a whole number 0-11;
+  // anything else is silently dropped rather than rejecting the enquiry.
+  const children = Array.isArray(b.children)
+    ? b.children
+        .slice(0, 4)
+        .map((c) => ({ age: Number(c && c.age) }))
+        .filter((c) => Number.isInteger(c.age) && c.age >= 0 && c.age <= 11)
+    : [];
 
   const enquiry = {
     id: `cz-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
@@ -309,6 +362,7 @@ router.post("/enquiry", enquiryLimiter, async (req, res) => {
     month: b.month || "",
     style: b.style || "",
     travellers,
+    children, // [{ age }] — informational only, NEVER affects total/pricing above
     name: String(b.name).trim(),
     phone: String(b.phone).trim(),
     email: String(b.email).trim(),
@@ -346,15 +400,29 @@ router.get("/admin/all", (req, res) => {
   });
 });
 
-// Admin: update the tax/fees percentage applied to every quote's total.
+// Admin: update the tax/fees percentage (and, optionally, the margin
+// percentage — see the file header) applied to every quote's total.
 router.put("/settings", adminLimiter, (req, res) => {
   if (!checkAdmin(req, res)) return;
-  const taxPercent = Number(req.body?.taxPercent);
+  const body = req.body || {};
+  const taxPercent = Number(body.taxPercent);
   if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
     return res.status(400).json({ error: "taxPercent must be a number between 0 and 100." });
   }
   const data = loadData();
-  data.settings = { ...data.settings, taxPercent };
+  const nextSettings = { ...data.settings, taxPercent };
+
+  // marginPercentage (NEW) is optional here — sending only taxPercent (old
+  // behaviour) leaves whatever margin was already saved untouched.
+  if (body.marginPercentage !== undefined) {
+    const marginPercentage = Number(body.marginPercentage);
+    if (!Number.isFinite(marginPercentage) || marginPercentage < 0 || marginPercentage > 100) {
+      return res.status(400).json({ error: "marginPercentage must be a number between 0 and 100." });
+    }
+    nextSettings.marginPercentage = marginPercentage;
+  }
+
+  data.settings = nextSettings;
   saveData(data);
   res.json({ ok: true, settings: data.settings });
 });
