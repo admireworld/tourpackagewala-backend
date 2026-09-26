@@ -69,7 +69,7 @@ const ADMIN_KEY = process.env.ADMIN_KEY || "";
 // Last-resort defaults, used only when NEITHER the dashboard-saved file
 // NOR a Render environment variable provides a value.
 const FACTORY_DEFAULTS = {
-  contactEmail: "hello@admiredworld.travel",
+  contactEmail: "salesadmiredworldtravel@gmail.com",
   contactPhone: "+91 96393 43585",
   contactPhoneAlt: "+91 78381 91329",
   whatsappNumber: "919639343585", // digits only, no + or spaces — used for wa.me links
