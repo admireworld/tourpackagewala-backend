@@ -32,7 +32,7 @@
  *   - Render Environment Variables are now the RELIABLE, PERMANENT source.
  *     Set these in Render → your service → Environment to make a change
  *     stick across every restart/redeploy/device, forever:
- *       CONTACT_EMAIL       = hello@admiredworld.travel
+ *       CONTACT_EMAIL       = salesadmiredworldtravel@gmail.com
  *       CONTACT_PHONE       = +91 96393 43585
  *       CONTACT_PHONE_ALT   = +91 78381 91329
  *       WHATSAPP_NUMBER     = 919639343585
