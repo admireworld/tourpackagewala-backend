@@ -156,6 +156,11 @@ app.use("/api/admin", require("./admin-auth"));
    instead of hardcoding them in the frontend) ---------- */
 app.use("/api/settings", require("./settings"));
 
+/* ---------- Festival Offer Popup (NEW feature — see offers.js; admin uploads
+   an image + title and switches it ON/OFF, every visitor sees it on the home
+   page 3 seconds after load) ---------- */
+app.use("/api/offers", require("./offers"));
+
 /* ---------- AI Content Provider settings (new feature — see ai-settings.js
    + ai-provider.js; lets an admin switch the blog/package AI provider and
    rotate its API key from the dashboard, no code change/redeploy needed) --- */
