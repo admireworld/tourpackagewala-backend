@@ -53,6 +53,14 @@
  *   separate from the existing new/contacted/converted/closed status,
  *   since a referral needs its own admin sign-off before it's trusted.
  *
+ * UPDATED (Lead Type + influencer source — additive):
+ * ------------------------------------------------------------
+ * Each lead now also saves leadType (INFLUENCER / CUSTOMER / REFERRAL),
+ * referredByInfluencer (influencer id = email), influencerName — resolved
+ * server-side from the referral code. GET /api/leads/admin/all returns them
+ * on every lead (older leads are backfilled on read) and accepts optional
+ * ?leadType= and ?influencer= filters. Nothing else in the API changed.
+ *
  * Env vars used (all optional, all already used elsewhere in this project):
  *   ADMIN_KEY  -> same secret used by blog.js/packages.js/refer.js etc.
  *   JWT_SECRET -> same secret server.js already uses to sign the customer
@@ -80,6 +88,8 @@ const VALID_SOURCES = new Set([
   "whatsapp_click",
   "sticky_bar",
   "package_enquiry", // "Book Now" query form on a package's own detail page
+  "customize_quote", // legacy Customize Package source
+  "PACKAGE_DOWNLOAD", // Package Detail / Customize package PDF download
   "other",
 ]);
 const VALID_STATUSES = new Set(["new", "contacted", "converted", "closed"]);
@@ -113,6 +123,66 @@ async function resolveReferrer(code) {
     console.error("leads: could not resolve referral code:", err.message);
     return null;
   }
+}
+
+/* ---------- Lead Type + Influencer attribution (additive) ----------
+   Every lead now also carries:
+     leadType             "INFLUENCER" | "CUSTOMER" | "REFERRAL"
+       REFERRAL   -> customer lead that came in through an influencer's referral code
+       INFLUENCER -> the person enquiring is themselves a referral partner/influencer
+       CUSTOMER   -> normal direct lead (no valid referral code)
+     referredByInfluencer the owning influencer's unique id. This project has no
+                          Influencer collection/ObjectId — influencers are the
+                          Refer & Earn partners keyed by verified email, so that
+                          email is the id (same value as referrerEmail).
+     influencerName       that influencer's name
+   (referralCode already existed and is unchanged.) All values are derived on the
+   server from the code itself — never trusted from the client. */
+const VALID_LEAD_TYPES = new Set(["INFLUENCER", "CUSTOMER", "REFERRAL"]);
+
+async function isInfluencerEmail(email) {
+  const clean = String(email || "").trim().toLowerCase();
+  if (!clean) return false;
+  try {
+    const referData = await store.load("refer", { byEmail: {}, byCode: {}, redeemedEmails: {} });
+    const entry = referData.byEmail && referData.byEmail[clean];
+    return !!(entry && entry.approved === true);
+  } catch (err) {
+    return false;
+  }
+}
+
+// Works out leadType/influencer fields for a lead being created right now.
+async function classifyLead({ email, referralCode, referrer }) {
+  if (referralCode && referrer && referrer.email && referrer.email !== email) {
+    return { leadType: "REFERRAL", referredByInfluencer: referrer.email, influencerName: referrer.name || "" };
+  }
+  if (await isInfluencerEmail(email)) {
+    return { leadType: "INFLUENCER", referredByInfluencer: null, influencerName: "" };
+  }
+  return { leadType: "CUSTOMER", referredByInfluencer: null, influencerName: "" };
+}
+
+// Read-time backfill so leads saved BEFORE this feature also show a proper
+// type in the admin list. Never writes to storage; leads that already have
+// leadType are returned untouched.
+function withLeadTypeDefaults(lead, approvedInfluencerEmails) {
+  // bookingSource: leads captured by this module always come from the website.
+  lead = { ...lead, bookingSource: lead.bookingSource || "ONLINE" };
+  if (lead.leadType && VALID_LEAD_TYPES.has(lead.leadType)) {
+    return {
+      ...lead,
+      referredByInfluencer: lead.referredByInfluencer || null,
+      influencerName: lead.influencerName || "",
+    };
+  }
+  if (lead.referralCode && lead.referrerEmail && lead.referrerEmail !== lead.email) {
+    return { ...lead, leadType: "REFERRAL", referredByInfluencer: lead.referrerEmail, influencerName: lead.referrerName || "" };
+  }
+  if (lead.email && approvedInfluencerEmails.has(String(lead.email).toLowerCase())) {
+    return { ...lead, leadType: "INFLUENCER", referredByInfluencer: null, influencerName: "" };
+  }
+  return { ...lead, leadType: "CUSTOMER", referredByInfluencer: null, influencerName: "" };
 }
 
 /* ---------- Auth check for a referral partner's own "my leads" endpoint ----------
@@ -180,6 +250,89 @@ const leadLimiter = rateLimit({
 
 /* ---------- Routes ---------- */
 
+// Public: capture a package PDF download lead. The frontend intentionally
+// sends only a WhatsApp number plus package/referral attribution.
+router.post("/whatsapp-download-lead", leadLimiter, async (req, res) => {
+  const b = req.body || {};
+  const whatsappNumber = String(b.whatsappNumber || "").replace(/\D/g, "");
+  const packageId = String(b.packageId || "").trim();
+  const packageName = String(b.packageName || "").trim();
+  const referralCode = String(b.referralCode || "").trim().toUpperCase();
+
+  if (!/^[0-9]{10}$/.test(whatsappNumber)) {
+    return res.status(400).json({ error: "Please enter a valid 10-digit WhatsApp number." });
+  }
+  if (!packageId || !packageName) {
+    return res.status(400).json({ error: "Package details are required." });
+  }
+
+  const data = await loadData();
+  const referrer = referralCode ? await resolveReferrer(referralCode) : null;
+  const attribution = referralCode
+    ? {
+        leadType: "REFERRAL",
+        referredByInfluencer: referrer ? referrer.email : null,
+        influencerName: referrer ? referrer.name : "",
+      }
+    : {
+        leadType: "CUSTOMER",
+        referredByInfluencer: null,
+        influencerName: "",
+      };
+
+  const tenMinAgo = Date.now() - 10 * 60 * 1000;
+  const dupe = data.leads.find(l =>
+    l.source === "PACKAGE_DOWNLOAD" &&
+    new Date(l.createdAt).getTime() > tenMinAgo &&
+    l.phone === whatsappNumber
+  );
+
+  if (dupe) {
+    dupe.packageId = packageId;
+    dupe.packageName = packageName;
+    dupe.interest = `Package Download — ${packageName}`;
+    dupe.finalPackage = packageName;
+    if (referralCode && !dupe.referralCode) {
+      dupe.referralCode = referralCode;
+      dupe.referrerEmail = referrer ? referrer.email : "";
+      dupe.referrerName = referrer ? referrer.name : "";
+      Object.assign(dupe, attribution);
+    }
+    await saveData(data);
+    return res.json({ ok: true, leadId: dupe.id, deduped: true });
+  }
+
+  const lead = {
+    id: `lead-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    name: "",
+    phone: whatsappNumber,
+    email: "",
+    interest: `Package Download — ${packageName}`,
+    message: `WhatsApp package PDF download: ${packageName}`,
+    source: "PACKAGE_DOWNLOAD",
+    page: "package-download",
+    packageId,
+    packageName,
+    initialPackage: packageName,
+    finalPackage: packageName,
+    referralCode: referralCode || "",
+    referrerEmail: referrer ? referrer.email : "",
+    referrerName: referrer ? referrer.name : "",
+    referralVerified: referralCode ? false : null,
+    referralVerifiedAt: null,
+    leadType: attribution.leadType,
+    referredByInfluencer: attribution.referredByInfluencer,
+    influencerName: attribution.influencerName,
+    bookingSource: "ONLINE",
+    createdAt: new Date().toISOString(),
+    status: "new",
+  };
+
+  data.leads.unshift(lead);
+  await saveData(data);
+  return res.json({ ok: true, leadId: lead.id });
+});
+
 // Public: capture a lead from any on-site lead magnet.
 router.post("/", leadLimiter, async (req, res) => {
   const b = req.body || {};
@@ -237,6 +390,9 @@ router.post("/", leadLimiter, async (req, res) => {
       dupe.initialPackage = initialPackage;
       dupe.referralVerified = false;
       dupe.referralVerifiedAt = null;
+      Object.assign(dupe, await classifyLead({ email: dupe.email || email, referralCode, referrer }));
+    } else if (!dupe.leadType) {
+      Object.assign(dupe, await classifyLead({ email: dupe.email || email, referralCode: dupe.referralCode, referrer: dupe.referrerEmail ? { email: dupe.referrerEmail, name: dupe.referrerName } : null }));
     }
     await saveData(data);
     return res.json({ ok: true, leadId: dupe.id, deduped: true });
@@ -269,6 +425,9 @@ router.post("/", leadLimiter, async (req, res) => {
     finalPackage: finalPackage || "",
     referralVerified: referralCode ? false : null, // admin sign-off, only meaningful for referral leads
     referralVerifiedAt: null,
+    // Lead Type + which influencer it came from (see classifyLead above)
+    ...(await classifyLead({ email, referralCode, referrer })),
+    bookingSource: "ONLINE", // website-captured lead (offline bookings live in bookings.js)
     status: "new",
     createdAt: new Date().toISOString(),
   };
@@ -307,6 +466,9 @@ router.get("/mine", requireAuth, async (req, res) => {
 });
 
 // Admin: view all leads + a quick source/status breakdown.
+// Response shape is unchanged; each lead just carries the extra fields
+// leadType / referredByInfluencer / influencerName. Optional query filters:
+//   ?leadType=INFLUENCER|CUSTOMER|REFERRAL   ?influencer=<name, email or code>
 router.get("/admin/all", async (req, res) => {
   const adminKey = req.query.adminKey || req.headers["x-admin-key"];
   if (ADMIN_KEY && adminKey !== ADMIN_KEY) {
@@ -314,14 +476,36 @@ router.get("/admin/all", async (req, res) => {
   }
   const data = await loadData();
 
+  const approved = new Set();
+  try {
+    const referData = await store.load("refer", { byEmail: {}, byCode: {}, redeemedEmails: {} });
+    for (const [em, entry] of Object.entries(referData.byEmail || {})) {
+      if (entry && entry.approved === true) approved.add(String(em).toLowerCase());
+    }
+  } catch (err) {
+    console.error("leads: could not load influencers for lead types:", err.message);
+  }
+
+  let leads = data.leads.map((l) => withLeadTypeDefaults(l, approved));
+
+  const typeFilter = String(req.query.leadType || "").trim().toUpperCase();
+  if (VALID_LEAD_TYPES.has(typeFilter)) leads = leads.filter((l) => l.leadType === typeFilter);
+  const infFilter = String(req.query.influencer || "").trim().toLowerCase();
+  if (infFilter) {
+    leads = leads.filter((l) =>
+      [l.influencerName, l.referredByInfluencer, l.referrerName, l.referrerEmail, l.referralCode]
+        .some((v) => String(v || "").toLowerCase().includes(infFilter))
+    );
+  }
+
   const bySource = {};
   const byStatus = {};
-  for (const l of data.leads) {
+  for (const l of leads) {
     bySource[l.source] = (bySource[l.source] || 0) + 1;
     byStatus[l.status] = (byStatus[l.status] || 0) + 1;
   }
 
-  res.json({ ok: true, leads: data.leads, total: data.leads.length, bySource, byStatus });
+  res.json({ ok: true, leads, total: leads.length, bySource, byStatus });
 });
 
 // Admin: update a lead's status as the sales team works through the list.

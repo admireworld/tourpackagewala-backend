@@ -514,3 +514,13 @@ upgrade mein shaamil nahi hain — wo apne purane tarike se hi kaam karte
 hain (Site Settings pehle se hi env-var fallback wala fix use karta hai,
 upar dekho). Agar chaho to inhe bhi isी Mongo store mein migrate kar sakta
 hoon — bata dena.
+
+---
+
+## Offline Booking Sync + Custom Voucher upload (naya)
+
+- `npm install` dobara chalao — `multer` dependency add hui hai (voucher PDF upload ke liye).
+- Optional env: `SITE_URL` (default `https://www.tourpackagewala.in`) — offline booking ki
+  "Your Booking Confirmed - Login to download Voucher" email me link ke liye. Email tabhi jayegi jab
+  `EMAIL_USER` / `EMAIL_PASS` set ho (upar Step 1); warna booking bann jaati hai, bas email skip hoti hai.
+- Uploaded voucher PDFs `store.js` ke through save hote hain (MongoDB set ho to permanent).
