@@ -40,8 +40,11 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const multer = require("multer");
 const rateLimit = require("express-rate-limit");
 const { generateText, generateImageUrl } = require("./ai-provider");
+const { getDb, isConfigured } = require("./db");
 
 const router = express.Router();
 
@@ -109,7 +112,137 @@ function nextUniqueSlug(name, existingPkgs) {
 
 function withSlug(p) {
   if (!p) return p;
-  return p.slug ? p : { ...p, slug: slugify(p.name) };
+  const out = p.slug ? { ...p } : { ...p, slug: slugify(p.name) };
+  // Images uploaded from the admin panel are stored as "/api/packages/image/<id>".
+  // Hand the website a FULL url so it displays them with zero frontend changes.
+  if (typeof out.imageUrl === "string" && out.imageUrl.startsWith("/api/")) {
+    out.imageUrl = PUBLIC_BASE_URL + out.imageUrl;
+  }
+  return out;
+}
+
+/* ---------- Package photos: paste a link OR upload a file ----------
+ * Uploaded files are stored in MongoDB (same "stores" collection), NOT on
+ * Render's temporary disk, so they survive restarts like the packages do.
+ * Leaving the image empty still works exactly as before (the site shows an
+ * auto-generated photo). */
+const PUBLIC_BASE_URL = (process.env.BACKEND_PUBLIC_URL || "https://tourpackagewala-backend.onrender.com").replace(/\/+$/, "");
+const IMG_PATH_PREFIX = "/api/packages/image/";
+const IMG_DIR = path.join(__dirname, "package-images-data"); // only used when MONGODB_URI is not set
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB (the admin page shrinks big phone photos first)
+const imgName = (id) => `pkgimg-${id}`;
+const imgFile = (id) => path.join(IMG_DIR, `${id}.json`);
+const safeImgId = (id) => /^[a-f0-9]{24}$/.test(String(id || ""));
+
+// Real image type from the file's first bytes (never trust the filename/mimetype).
+function sniffImageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x89 && buf.slice(1, 4).toString("latin1") === "PNG") return "image/png";
+  if (buf.slice(0, 4).toString("latin1") === "GIF8") return "image/gif";
+  if (buf.slice(0, 4).toString("latin1") === "RIFF" && buf.slice(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
+}
+
+// Accepts "", an https:// link, or one of our own uploaded-image paths/URLs.
+// Returns { ok, value } — value is what gets stored (our own images are stored
+// as a relative path so they keep working if the backend address ever changes).
+function cleanImageUrl(raw) {
+  const v = String(raw == null ? "" : raw).trim();
+  if (!v) return { ok: true, value: null };
+  if (v.startsWith(PUBLIC_BASE_URL + IMG_PATH_PREFIX)) return { ok: true, value: v.slice(PUBLIC_BASE_URL.length) };
+  if (v.startsWith(IMG_PATH_PREFIX)) return { ok: true, value: v };
+  if (/^https?:\/\/\S+$/i.test(v)) return { ok: true, value: v };
+  return { ok: false, value: null };
+}
+
+// Best-effort: remove an uploaded photo that no package uses any more.
+async function deleteUploadedImage(url) {
+  try {
+    const m = String(url || "").match(/\/api\/packages\/image\/([a-f0-9]{24})/);
+    if (m) await persistDelete(imgName(m[1]), imgFile(m[1]));
+  } catch (err) {
+    console.error("packages: could not delete old image:", err.message);
+  }
+}
+
+/* ---------- PERMANENT STORAGE (fix for "packages keep disappearing") ----------
+ * Packages used to be saved ONLY to packages-data.json on the server's disk.
+ * On Render's free tier that disk is temporary: every restart / redeploy /
+ * sleep-wake wipes it, so uploaded packages silently vanished and the site
+ * fell back to the 6 seed packages (+ whatever the weekly AI job re-added).
+ *
+ * Now, if MONGODB_URI is set (same env var bookings/leads already use),
+ * packages are kept in MongoDB in the same "stores" collection as store.js:
+ *   { _id: "packages-india" | "packages-international", data: {...} }
+ *
+ * Safety rules:
+ *  - If Mongo IS configured but can't be reached, we THROW (request fails
+ *    with a 500) instead of quietly falling back to seed data — otherwise a
+ *    short network blip could overwrite all your real packages with seeds.
+ *  - First run after this update: if Mongo has nothing yet, it picks up
+ *    whatever is in the old local JSON file (so nothing currently live is
+ *    lost), else the seed packages.
+ *  - If MONGODB_URI is NOT set, behaviour is exactly as before (local file).
+ */
+async function persistLoad(name, file, makeDefault) {
+  if (isConfigured()) {
+    const db = await getDb();
+    if (!db) throw new Error("MongoDB is configured but not reachable right now.");
+    const doc = await db.collection("stores").findOne({ _id: name });
+    if (doc && doc.data) return doc.data;
+    try {
+      return JSON.parse(fs.readFileSync(file, "utf8")); // one-time carry-over of old local data
+    } catch {
+      return makeDefault();
+    }
+  }
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return makeDefault();
+  }
+}
+async function persistSave(name, file, data) {
+  if (isConfigured()) {
+    const db = await getDb();
+    if (!db) throw new Error("MongoDB is configured but not reachable right now.");
+    await db.collection("stores").updateOne(
+      { _id: name },
+      { $set: { data, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    return;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+}
+async function persistDelete(name, file) {
+  if (isConfigured()) {
+    const db = await getDb();
+    if (!db) throw new Error("MongoDB is configured but not reachable right now.");
+    await db.collection("stores").deleteOne({ _id: name });
+    return;
+  }
+  try { fs.unlinkSync(file); } catch { /* already gone */ }
+}
+
+// Unique, URL-safe id suffix. Date.now() alone repeats when two packages are
+// created in the same millisecond (bulk upload) -> duplicate ids -> deleting
+// one package would delete BOTH. Lowercase a-z0-9 only (matches the frontend's
+// /package/... URL parser).
+function uid() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// Tiny per-key queue so two requests can't read-modify-write the same
+// package list at the same moment (would lose one of the changes).
+const _locks = {};
+function withLock(key, fn) {
+  const prev = _locks[key] || Promise.resolve();
+  const next = prev.then(() => fn());
+  _locks[key] = next.catch(() => {});
+  return next;
 }
 
 /* ---------- Seed data (same 6 packages the frontend already had) ---------- */
@@ -223,22 +356,18 @@ const AUTO_DESTINATIONS = [
 ];
 
 /* ---------- Storage ---------- */
-function loadData() {
-  let data;
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    data = JSON.parse(raw);
-    data.packages = data.packages || [];
-  } catch {
-    data = { packages: SEED_PACKAGES.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
-  }
+async function loadData() {
+  const data = await persistLoad("packages-india", DATA_FILE, () => ({
+    packages: SEED_PACKAGES.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0,
+  }));
+  data.packages = data.packages || [];
   // Backfill/repair slugs (new field) and persist once so every future
   // load already has them — no-op once every package has a stable slug.
-  if (ensureSlugs(data.packages)) saveData(data);
+  if (ensureSlugs(data.packages)) await saveData(data);
   return data;
 }
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+async function saveData(data) {
+  await persistSave("packages-india", DATA_FILE, data);
 }
 
 function isoWeekKey(d = new Date()) {
@@ -266,8 +395,11 @@ function pickAutoDestination(data) {
 const CATS = ["hills", "beach", "heritage", "offbeat"];
 
 /* ---------- Core: weekly auto-add ---------- */
-async function ensureWeeklyPackage() {
-  const data = loadData();
+function ensureWeeklyPackage() {
+  return withLock("india", _ensureWeeklyPackage);
+}
+async function _ensureWeeklyPackage() {
+  const data = await loadData();
   const week = isoWeekKey();
   if (data.lastAutoWeek === week) return data.packages;
 
@@ -290,7 +422,7 @@ async function ensureWeeklyPackage() {
     const jsonEnd = cleaned.lastIndexOf("}");
     const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
     pkg = {
-      id: `auto-${Date.now()}`,
+      id: `auto-${uid()}`,
       destination,
       name: parsed.name || destination,
       loc: parsed.loc || destination,
@@ -311,7 +443,7 @@ async function ensureWeeklyPackage() {
   } catch (err) {
     console.error("packages: AI generation failed, using fallback:", err.message);
     pkg = {
-      id: `auto-${Date.now()}`,
+      id: `auto-${uid()}`,
       destination,
       name: destination.split("—")[0].trim(),
       loc: destination,
@@ -334,7 +466,7 @@ async function ensureWeeklyPackage() {
   pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   data.lastAutoWeek = week;
-  saveData(data);
+  await saveData(data);
   return data.packages;
 }
 
@@ -349,6 +481,63 @@ function checkAdmin(req, res) {
 }
 const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 
+/* ---------- Package photo upload / serve (shared by India + International) ---------- */
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(jpeg|png|webp|gif)$/i.test(file.mimetype || "")) return cb(null, true);
+    cb(new Error("Only JPG, PNG, WEBP or GIF images are allowed."));
+  },
+}).single("image");
+
+// Upload a photo -> returns { imageUrl } to put in the package's imageUrl.
+// Multipart, so the admin key is read from the x-admin-key header (same as offers).
+router.post("/image", adminLimiter, (req, res) => {
+  const key = req.headers["x-admin-key"] || req.query?.adminKey;
+  if (ADMIN_KEY && key !== ADMIN_KEY) return res.status(401).json({ error: "Invalid admin key." });
+  uploadImage(req, res, async (err) => {
+    try {
+      if (err) {
+        const msg = err.code === "LIMIT_FILE_SIZE" ? "Image is too large (max 5 MB)." : err.message || "Upload failed.";
+        return res.status(400).json({ error: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: "Please choose an image (field name: image)." });
+      const mime = sniffImageType(req.file.buffer);
+      if (!mime) return res.status(400).json({ error: "This file is not a valid JPG/PNG/WEBP/GIF image." });
+      const id = crypto.randomBytes(12).toString("hex");
+      await persistSave(imgName(id), imgFile(id), {
+        mime, data: req.file.buffer.toString("base64"), createdAt: new Date().toISOString(),
+      });
+      res.json({ ok: true, imageUrl: IMG_PATH_PREFIX + id });
+    } catch (e) {
+      console.error("packages: image upload failed:", e.message);
+      res.status(500).json({ error: "Could not save the image. Please try again." });
+    }
+  });
+});
+
+// The photo itself. Helmet's default Cross-Origin-Resource-Policy is
+// "same-origin", which would stop the Vercel-hosted website from showing an
+// image served by this Render backend — so it is relaxed for this route only.
+router.get("/image/:id", async (req, res) => {
+  try {
+    if (!safeImgId(req.params.id)) return res.status(400).end();
+    const rec = await persistLoad(imgName(req.params.id), imgFile(req.params.id), () => null);
+    if (!rec || !rec.data) return res.status(404).end();
+    const buf = Buffer.from(rec.data, "base64");
+    res.setHeader("Content-Type", rec.mime || "image/jpeg");
+    res.setHeader("Content-Length", buf.length);
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable"); // every upload has its own unique id
+    res.end(buf);
+  } catch (e) {
+    console.error("packages: image serve failed:", e.message);
+    res.status(500).end();
+  }
+});
+
 /* ---------- Routes ---------- */
 router.get("/india", async (req, res) => {
   try {
@@ -360,70 +549,108 @@ router.get("/india", async (req, res) => {
   }
 });
 
-router.get("/india/:id", (req, res) => {
-  const data = loadData();
-  const pkg = data.packages.find((p) => p.id === req.params.id);
-  if (!pkg) return res.status(404).json({ error: "Package not found." });
-  res.json({ ok: true, package: withSlug(pkg) });
-});
-
-router.post("/india", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const body = req.body || {};
-  if (!body.name || !body.loc) {
-    return res.status(400).json({ error: "name and loc are required." });
+router.get("/india/:id", async (req, res) => {
+  try {
+    const data = await loadData();
+    const pkg = data.packages.find((p) => p.id === req.params.id);
+    if (!pkg) return res.status(404).json({ error: "Package not found." });
+    res.json({ ok: true, package: withSlug(pkg) });
+  } catch (err) {
+    console.error("packages get error:", err);
+    res.status(500).json({ error: "Could not load package." });
   }
-  const data = loadData();
-  const pkg = {
-    id: `manual-${Date.now()}`,
-    destination: body.destination || body.loc,
-    name: body.name,
-    loc: body.loc,
-    tag: body.tag || "5D/4N",
-    cat: body.cat || "offbeat",
-    desc: body.desc || "",
-    hotelCategory: body.hotelCategory || "3-star",
-    hotelName: (body.hotelName || "").trim(),
-    dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
-    inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
-    exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
-    price: Number(body.price) || 0,
-    discountPrice: body.discountPrice ? Number(body.discountPrice) : undefined,
-    imageUrl: body.imageUrl || null,
-    source: "admin",
-    createdAt: new Date().toISOString(),
-  };
-  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
-  data.packages.unshift(pkg);
-  saveData(data);
-  res.json({ ok: true, package: withSlug(pkg) });
 });
 
-router.put("/india/:id", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const data = loadData();
-  const idx = data.packages.findIndex((p) => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: "Package not found." });
-  const body = req.body || {};
-  const allowed = [
-    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
-    "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
-  ];
-  allowed.forEach((field) => {
-    if (body[field] !== undefined) data.packages[idx][field] = body[field];
-  });
-  saveData(data);
-  res.json({ ok: true, package: withSlug(data.packages[idx]) });
+router.post("/india", adminLimiter, async (req, res) => {
+  try {
+    await withLock("india", async () => {
+    if (!checkAdmin(req, res)) return;
+    const body = req.body || {};
+    if (!body.name || !body.loc) {
+      return res.status(400).json({ error: "name and loc are required." });
+    }
+    const img = cleanImageUrl(body.imageUrl);
+    if (!img.ok) return res.status(400).json({ error: "Image link must start with https:// (or upload a file instead)." });
+    const data = await loadData();
+    const pkg = {
+      id: `manual-${uid()}`,
+      destination: body.destination || body.loc,
+      name: body.name,
+      loc: body.loc,
+      tag: body.tag || "5D/4N",
+      cat: body.cat || "offbeat",
+      desc: body.desc || "",
+      hotelCategory: body.hotelCategory || "3-star",
+      hotelName: (body.hotelName || "").trim(),
+      dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
+      inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
+      exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
+      price: Number(body.price) || 0,
+      discountPrice: body.discountPrice ? Number(body.discountPrice) : undefined,
+      imageUrl: img.value,
+      source: "admin",
+      createdAt: new Date().toISOString(),
+    };
+    pkg.slug = nextUniqueSlug(pkg.name, data.packages);
+    data.packages.unshift(pkg);
+    await saveData(data);
+    res.json({ ok: true, package: withSlug(pkg) });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
 });
 
-router.delete("/india/:id", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const data = loadData();
-  const before = data.packages.length;
-  data.packages = data.packages.filter((p) => p.id !== req.params.id);
-  if (data.packages.length === before) return res.status(404).json({ error: "Package not found." });
-  saveData(data);
-  res.json({ ok: true });
+router.put("/india/:id", adminLimiter, async (req, res) => {
+  try {
+    await withLock("india", async () => {
+    if (!checkAdmin(req, res)) return;
+    const data = await loadData();
+    const idx = data.packages.findIndex((p) => p.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Package not found." });
+    const body = req.body || {};
+    const allowed = [
+      "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
+      "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
+    ];
+    let oldImage = null;
+    if (body.imageUrl !== undefined) {
+      const img = cleanImageUrl(body.imageUrl);
+      if (!img.ok) return res.status(400).json({ error: "Image link must start with https:// (or upload a file instead)." });
+      body.imageUrl = img.value;
+      if (img.value !== (data.packages[idx].imageUrl || null)) oldImage = data.packages[idx].imageUrl;
+    }
+    allowed.forEach((field) => {
+      if (body[field] !== undefined) data.packages[idx][field] = body[field];
+    });
+    await saveData(data);
+    if (oldImage) await deleteUploadedImage(oldImage); // replaced photo no longer needed
+    res.json({ ok: true, package: withSlug(data.packages[idx]) });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
+});
+
+router.delete("/india/:id", adminLimiter, async (req, res) => {
+  try {
+    await withLock("india", async () => {
+    if (!checkAdmin(req, res)) return;
+    const data = await loadData();
+    const before = data.packages.length;
+    const removed = data.packages.find((p) => p.id === req.params.id);
+    data.packages = data.packages.filter((p) => p.id !== req.params.id);
+    if (data.packages.length === before) return res.status(404).json({ error: "Package not found." });
+    await saveData(data);
+    if (removed && removed.imageUrl) await deleteUploadedImage(removed.imageUrl);
+    res.json({ ok: true });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
 });
 
 /* ================================================================
@@ -546,21 +773,17 @@ const AUTO_DESTINATIONS_INTL = [
 
 const CATS_INTL = ["beach", "city", "scenic", "honeymoon"];
 
-function loadDataIntl() {
-  let data;
-  try {
-    const raw = fs.readFileSync(DATA_FILE_INTL, "utf8");
-    data = JSON.parse(raw);
-    data.packages = data.packages || [];
-  } catch {
-    data = { packages: SEED_PACKAGES_INTL.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0 };
-  }
+async function loadDataIntl() {
+  const data = await persistLoad("packages-international", DATA_FILE_INTL, () => ({
+    packages: SEED_PACKAGES_INTL.map((p) => ({ ...p })), lastAutoWeek: null, destCursor: 0,
+  }));
+  data.packages = data.packages || [];
   // Backfill/repair slugs the same way loadData() does for India packages.
-  if (ensureSlugs(data.packages)) saveDataIntl(data);
+  if (ensureSlugs(data.packages)) await saveDataIntl(data);
   return data;
 }
-function saveDataIntl(data) {
-  fs.writeFileSync(DATA_FILE_INTL, JSON.stringify(data, null, 2), "utf8");
+async function saveDataIntl(data) {
+  await persistSave("packages-international", DATA_FILE_INTL, data);
 }
 
 function pickAutoDestinationIntl(data) {
@@ -569,8 +792,11 @@ function pickAutoDestinationIntl(data) {
   return dest;
 }
 
-async function ensureWeeklyPackageIntl() {
-  const data = loadDataIntl();
+function ensureWeeklyPackageIntl() {
+  return withLock("international", _ensureWeeklyPackageIntl);
+}
+async function _ensureWeeklyPackageIntl() {
+  const data = await loadDataIntl();
   const week = isoWeekKey();
   if (data.lastAutoWeek === week) return data.packages;
 
@@ -593,7 +819,7 @@ async function ensureWeeklyPackageIntl() {
     const jsonEnd = cleaned.lastIndexOf("}");
     const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
     pkg = {
-      id: `auto-intl-${Date.now()}`,
+      id: `auto-intl-${uid()}`,
       destination,
       name: parsed.name || destination,
       loc: parsed.loc || destination,
@@ -614,7 +840,7 @@ async function ensureWeeklyPackageIntl() {
   } catch (err) {
     console.error("packages(intl): AI generation failed, using fallback:", err.message);
     pkg = {
-      id: `auto-intl-${Date.now()}`,
+      id: `auto-intl-${uid()}`,
       destination,
       name: destination.split("—")[0].trim(),
       loc: destination,
@@ -637,7 +863,7 @@ async function ensureWeeklyPackageIntl() {
   pkg.slug = nextUniqueSlug(pkg.name, data.packages);
   data.packages.unshift(pkg);
   data.lastAutoWeek = week;
-  saveDataIntl(data);
+  await saveDataIntl(data);
   return data.packages;
 }
 
@@ -652,70 +878,108 @@ router.get("/international", async (req, res) => {
   }
 });
 
-router.get("/international/:id", (req, res) => {
-  const data = loadDataIntl();
-  const pkg = data.packages.find((p) => p.id === req.params.id);
-  if (!pkg) return res.status(404).json({ error: "Package not found." });
-  res.json({ ok: true, package: withSlug(pkg) });
-});
-
-router.post("/international", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const body = req.body || {};
-  if (!body.name || !body.loc) {
-    return res.status(400).json({ error: "name and loc are required." });
+router.get("/international/:id", async (req, res) => {
+  try {
+    const data = await loadDataIntl();
+    const pkg = data.packages.find((p) => p.id === req.params.id);
+    if (!pkg) return res.status(404).json({ error: "Package not found." });
+    res.json({ ok: true, package: withSlug(pkg) });
+  } catch (err) {
+    console.error("packages(intl) get error:", err);
+    res.status(500).json({ error: "Could not load package." });
   }
-  const data = loadDataIntl();
-  const pkg = {
-    id: `manual-intl-${Date.now()}`,
-    destination: body.destination || body.loc,
-    name: body.name,
-    loc: body.loc,
-    tag: body.tag || "5D/4N",
-    cat: body.cat || "city",
-    desc: body.desc || "",
-    hotelCategory: body.hotelCategory || "4-star",
-    hotelName: (body.hotelName || "").trim(),
-    dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
-    inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
-    exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
-    price: Number(body.price) || 0,
-    discountPrice: body.discountPrice ? Number(body.discountPrice) : undefined,
-    imageUrl: body.imageUrl || null,
-    source: "admin",
-    createdAt: new Date().toISOString(),
-  };
-  pkg.slug = nextUniqueSlug(pkg.name, data.packages);
-  data.packages.unshift(pkg);
-  saveDataIntl(data);
-  res.json({ ok: true, package: withSlug(pkg) });
 });
 
-router.put("/international/:id", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const data = loadDataIntl();
-  const idx = data.packages.findIndex((p) => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: "Package not found." });
-  const body = req.body || {};
-  const allowed = [
-    "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
-    "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
-  ];
-  allowed.forEach((field) => {
-    if (body[field] !== undefined) data.packages[idx][field] = body[field];
-  });
-  saveDataIntl(data);
-  res.json({ ok: true, package: withSlug(data.packages[idx]) });
+router.post("/international", adminLimiter, async (req, res) => {
+  try {
+    await withLock("international", async () => {
+    if (!checkAdmin(req, res)) return;
+    const body = req.body || {};
+    if (!body.name || !body.loc) {
+      return res.status(400).json({ error: "name and loc are required." });
+    }
+    const img = cleanImageUrl(body.imageUrl);
+    if (!img.ok) return res.status(400).json({ error: "Image link must start with https:// (or upload a file instead)." });
+    const data = await loadDataIntl();
+    const pkg = {
+      id: `manual-intl-${uid()}`,
+      destination: body.destination || body.loc,
+      name: body.name,
+      loc: body.loc,
+      tag: body.tag || "5D/4N",
+      cat: body.cat || "city",
+      desc: body.desc || "",
+      hotelCategory: body.hotelCategory || "4-star",
+      hotelName: (body.hotelName || "").trim(),
+      dayWise: Array.isArray(body.dayWise) ? body.dayWise : [],
+      inclusions: Array.isArray(body.inclusions) ? body.inclusions : [],
+      exclusions: Array.isArray(body.exclusions) ? body.exclusions : [],
+      price: Number(body.price) || 0,
+      discountPrice: body.discountPrice ? Number(body.discountPrice) : undefined,
+      imageUrl: img.value,
+      source: "admin",
+      createdAt: new Date().toISOString(),
+    };
+    pkg.slug = nextUniqueSlug(pkg.name, data.packages);
+    data.packages.unshift(pkg);
+    await saveDataIntl(data);
+    res.json({ ok: true, package: withSlug(pkg) });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
 });
 
-router.delete("/international/:id", adminLimiter, (req, res) => {
-  if (!checkAdmin(req, res)) return;
-  const data = loadDataIntl();
-  const before = data.packages.length;
-  data.packages = data.packages.filter((p) => p.id !== req.params.id);
-  if (data.packages.length === before) return res.status(404).json({ error: "Package not found." });
-  saveDataIntl(data);
-  res.json({ ok: true });
+router.put("/international/:id", adminLimiter, async (req, res) => {
+  try {
+    await withLock("international", async () => {
+    if (!checkAdmin(req, res)) return;
+    const data = await loadDataIntl();
+    const idx = data.packages.findIndex((p) => p.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Package not found." });
+    const body = req.body || {};
+    const allowed = [
+      "destination", "name", "loc", "tag", "cat", "desc", "hotelCategory", "hotelName",
+      "dayWise", "inclusions", "exclusions", "price", "discountPrice", "imageUrl",
+    ];
+    let oldImage = null;
+    if (body.imageUrl !== undefined) {
+      const img = cleanImageUrl(body.imageUrl);
+      if (!img.ok) return res.status(400).json({ error: "Image link must start with https:// (or upload a file instead)." });
+      body.imageUrl = img.value;
+      if (img.value !== (data.packages[idx].imageUrl || null)) oldImage = data.packages[idx].imageUrl;
+    }
+    allowed.forEach((field) => {
+      if (body[field] !== undefined) data.packages[idx][field] = body[field];
+    });
+    await saveDataIntl(data);
+    if (oldImage) await deleteUploadedImage(oldImage); // replaced photo no longer needed
+    res.json({ ok: true, package: withSlug(data.packages[idx]) });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
+});
+
+router.delete("/international/:id", adminLimiter, async (req, res) => {
+  try {
+    await withLock("international", async () => {
+    if (!checkAdmin(req, res)) return;
+    const data = await loadDataIntl();
+    const before = data.packages.length;
+    const removed = data.packages.find((p) => p.id === req.params.id);
+    data.packages = data.packages.filter((p) => p.id !== req.params.id);
+    if (data.packages.length === before) return res.status(404).json({ error: "Package not found." });
+    await saveDataIntl(data);
+    if (removed && removed.imageUrl) await deleteUploadedImage(removed.imageUrl);
+    res.json({ ok: true });
+    });
+  } catch (err) {
+    console.error("packages write error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Could not save package. Please try again." });
+  }
 });
 
 /* ================================================================
@@ -737,22 +1001,27 @@ router.delete("/international/:id", adminLimiter, (req, res) => {
 // Public: full package detail by slug — checks India packages first,
 // then International. Used for the customer-facing package detail page
 // (SEO-friendly URL) instead of looking the package up by its internal id.
-router.get("/:slug", (req, res) => {
-  const slug = String(req.params.slug || "").trim().toLowerCase();
-  if (!slug) return res.status(404).json({ error: "Package not found." });
+router.get("/:slug", async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim().toLowerCase();
+    if (!slug) return res.status(404).json({ error: "Package not found." });
 
-  const indiaData = loadData();
-  let pkg = indiaData.packages.find((p) => p.slug === slug);
-  let category = "india";
+    const indiaData = await loadData();
+    let pkg = indiaData.packages.find((p) => p.slug === slug);
+    let category = "india";
 
-  if (!pkg) {
-    const intlData = loadDataIntl();
-    pkg = intlData.packages.find((p) => p.slug === slug);
-    category = "international";
+    if (!pkg) {
+      const intlData = await loadDataIntl();
+      pkg = intlData.packages.find((p) => p.slug === slug);
+      category = "international";
+    }
+
+    if (!pkg) return res.status(404).json({ error: "Package not found." });
+    res.json({ ok: true, category, package: withSlug(pkg) });
+  } catch (err) {
+    console.error("packages slug error:", err);
+    res.status(500).json({ error: "Could not load package." });
   }
-
-  if (!pkg) return res.status(404).json({ error: "Package not found." });
-  res.json({ ok: true, category, package: withSlug(pkg) });
 });
 
 // Public: flat list of every package (India + International) with just
@@ -760,10 +1029,10 @@ router.get("/:slug", (req, res) => {
 // Does NOT trigger the weekly AI auto-add (that only happens on the
 // existing /india and /international list routes) so hitting this for
 // a sitemap build never costs an AI call.
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const indiaData = loadData();
-    const intlData = loadDataIntl();
+    const indiaData = await loadData();
+    const intlData = await loadDataIntl();
     const packages = [
       ...indiaData.packages.map((p) => ({
         id: p.id,
