@@ -161,6 +161,11 @@ app.use("/api/settings", require("./settings"));
    page 3 seconds after load) ---------- */
 app.use("/api/offers", require("./offers"));
 
+/* ---------- Taxi Service / Fare Calculator (NEW feature — see taxi.js; city
+   names + fares for the public "Taxi Service — Fare Calculator" page, fully
+   editable from the Admin Dashboard -> "Taxi Fares" tab) ---------- */
+app.use("/api/taxi", require("./taxi"));
+
 /* ---------- AI Content Provider settings (new feature — see ai-settings.js
    + ai-provider.js; lets an admin switch the blog/package AI provider and
    rotate its API key from the dashboard, no code change/redeploy needed) --- */

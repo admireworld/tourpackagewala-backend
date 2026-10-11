@@ -524,3 +524,20 @@ hoon — bata dena.
   "Your Booking Confirmed - Login to download Voucher" email me link ke liye. Email tabhi jayegi jab
   `EMAIL_USER` / `EMAIL_PASS` set ho (upar Step 1); warna booking bann jaati hai, bas email skip hoti hai.
 - Uploaded voucher PDFs `store.js` ke through save hote hain (MongoDB set ho to permanent).
+
+---
+
+## Taxi Service — Fare Calculator (new)
+
+Public page: `/taxi-fare-calculator` (and one SEO page per route: `/taxi-fare/<from>-to-<to>`).
+All city names and prices are stored by `taxi.js` (same MongoDB / local-JSON store as bookings & offers)
+and are edited from **Admin Dashboard → Taxi Fares** — no code change or redeploy needed.
+
+- `GET    /api/taxi/routes` — public, active routes only (the first route is the page's default selection)
+- `GET    /api/taxi/admin/all` — admin, every route (incl. hidden)
+- `POST   /api/taxi/admin` — admin, add one route
+- `PUT    /api/taxi/admin/:id` — admin, edit one route (send only the fields to change)
+- `DELETE /api/taxi/admin/:id` — admin, delete one route
+- `POST   /api/taxi/admin/bulk` — admin, paste many `From, To, KM, Sedan, Ertiga, Innova, Tempo` lines
+
+Admin routes use the same `ADMIN_KEY` as every other module. No new env vars or npm packages are needed.
