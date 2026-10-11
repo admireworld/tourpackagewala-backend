@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.tourpackagewala.in/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.tourpackagewala.in/taxi-fare-calculator</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.tourpackagewala.in/policies.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url><loc>https://www.tourpackagewala.in/package/india/kashmir-valley-escape--in1</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/india/kerala-backwaters--in2</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/india/royal-rajasthan--in3</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/india/goa-beach-break--in4</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/india/himachal-hills--in5</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/india/meghalaya-offbeat--in6</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+
+  <url><loc>https://www.tourpackagewala.in/package/international/bali-island-retreat--it1</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/international/dubai-city-lights--it2</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/international/switzerland-alps--it3</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/international/maldives-overwater--it4</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/international/thailand-highlights--it5</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.tourpackagewala.in/package/international/singapore-explorer--it6</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+
+  <url><loc>https://www.tourpackagewala.in/taxi-fare/haldwani-to-nainital</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+</urlset>

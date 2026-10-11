@@ -1,0 +1,18 @@
+{
+  "redirects": [
+    { "source": "/sitemap_index.xml", "destination": "/sitemap.xml", "permanent": true }
+  ],
+  "headers": [
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        { "key": "Content-Type", "value": "application/xml; charset=utf-8" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/taxi-fare-calculator", "destination": "/taxi-fare-calculator.html" },
+    { "source": "/taxi-fare/:slug", "destination": "/taxi-fare-calculator.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

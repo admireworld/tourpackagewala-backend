@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+
+# Plain-facts summary of this business for AI assistants / answer engines:
+# https://www.tourpackagewala.in/llms.txt
+
+Sitemap: https://www.tourpackagewala.in/sitemap.xml

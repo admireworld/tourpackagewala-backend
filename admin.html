@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Dashboard — AdmireDworld Travel</title>
+<style>
+:root{
+  --navy:#2B3968; --navy-deep:#1A2340; --teal:#3D5FA8; --teal-deep:#2C4680;
+  --amber:#E3A23E; --amber-deep:#C98620; --coral:#D14B3D; --coral-deep:#B23A2E;
+  --sand:#E7EAF1; --sand-soft:#F2F3F6; --ink:#1D2433; --ink-soft:#5B6472;
+  --cloud:#FFFFFF; --line:#E2E5EB;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --serif:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --radius-s:6px; --radius-m:10px; --radius-l:14px;
+  --shadow-card:0 1px 2px rgba(16,24,40,0.04), 0 4px 14px rgba(16,24,40,0.07);
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--sand-soft);line-height:1.5;}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:600;color:var(--navy);margin:0 0 .4em;}
+a{color:var(--teal);}
+button{font-family:var(--sans);cursor:pointer;}
+input,select,textarea{font-family:var(--sans);}
+
+/* ---------- Login screen ---------- */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(160deg,var(--navy) 0%,var(--navy-deep) 100%);}
+.login-card{background:var(--cloud);border-radius:var(--radius-l);box-shadow:var(--shadow-card);
+  padding:36px 32px;width:100%;max-width:380px;}
+.login-card h1{font-size:22px;margin-bottom:4px;}
+.login-sub{color:var(--ink-soft);font-size:14px;margin-bottom:22px;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);
+  border-radius:var(--radius-s);font-size:14px;background:var(--sand-soft);color:var(--ink);}
+.field textarea{resize:vertical;min-height:70px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;
+  border-radius:999px;border:none;font-size:14px;font-weight:600;background:var(--teal);color:#fff;}
+.btn:hover{background:var(--teal-deep);}
+.btn.full{width:100%;}
+.btn.amber{background:var(--amber);}
+.btn.amber:hover{background:var(--amber-deep);}
+.btn.coral{background:var(--coral);}
+.btn.coral:hover{background:var(--coral-deep);}
+.btn.ghost{background:transparent;color:var(--navy);border:1px solid var(--line);}
+.btn.small{padding:6px 12px;font-size:12.5px;}
+.err-msg{color:var(--coral-deep);font-size:13px;margin-top:10px;min-height:16px;}
+.ok-msg{color:var(--teal-deep);font-size:13px;margin-top:10px;min-height:16px;}
+
+/* ---------- Dashboard shell ---------- */
+#dashboard{display:none;min-height:100vh;}
+.dash-wrap{display:flex;min-height:100vh;}
+.sidebar{width:230px;flex-shrink:0;background:var(--navy);color:#fff;padding:22px 14px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sidebar h2{color:#fff;font-size:17px;margin-bottom:2px;}
+.sidebar .brand-sub{color:#c7d0e0;font-size:12px;margin-bottom:20px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-s);
+  font-size:13.5px;font-weight:600;color:#dbe2f0;cursor:pointer;margin-bottom:3px;}
+.nav-item:hover{background:rgba(255,255,255,0.08);}
+.nav-item.active{background:var(--teal);color:#fff;}
+.sidebar-foot{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15);}
+.main{flex:1;padding:26px 30px 60px;max-width:1180px;}
+.main-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+.section{display:none;}
+.section.active{display:block;}
+.card{background:var(--cloud);border:1px solid var(--line);border-radius:var(--radius-m);
+  padding:20px 22px;margin-bottom:20px;box-shadow:var(--shadow-card);}
+.card h3{font-size:16px;margin-bottom:14px;}
+.grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px;}
+.stat-card{background:var(--cloud);border:1px solid var(--line);border-radius:var(--radius-m);padding:16px 18px;}
+.stat-card .num{font-family:var(--serif);font-size:26px;color:var(--navy);font-weight:700;}
+.stat-card .lbl{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+th{color:var(--ink-soft);font-size:12px;text-transform:uppercase;letter-spacing:.03em;}
+tr:hover td{background:var(--sand-soft);}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;
+  background:var(--sand);color:var(--navy);}
+.pill.green{background:#DCF3EA;color:#1D7A56;}
+.pill.amber{background:#FBEBD8;color:var(--amber-deep);}
+.pill.red{background:#FBE0DB;color:var(--coral-deep);}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+.form-grid .field{margin-bottom:0;}
+.form-grid .span2{grid-column:span 2;}
+.tab-strip{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.tab-strip button{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--cloud);
+  font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+.tab-strip button.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.subsection{display:none;}
+.subsection.active{display:block;}
+.muted{color:var(--ink-soft);font-size:13px;}
+.app-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;font-size:14px;}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--navy);color:#fff;padding:12px 18px;
+  border-radius:var(--radius-s);font-size:13.5px;box-shadow:var(--shadow-card);z-index:999;
+  opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.badge-src{font-size:11px;text-transform:uppercase;font-weight:700;color:var(--ink-soft);}
+.empty{color:var(--ink-soft);font-size:13.5px;padding:14px 0;}
+@media(max-width:820px){
+  .dash-wrap{flex-direction:column;}
+  .sidebar{width:100%;height:auto;position:relative;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+  .sidebar h2,.sidebar .brand-sub{width:100%;}
+  .main{padding:18px;}
+  table{display:block;overflow-x:auto;white-space:nowrap;}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN SCREEN ================= -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>Admin Dashboard</h1>
+    <div class="login-sub">AdmireDworld Travel — sign in to manage the whole site from one place.</div>
+    <div class="field">
+      <label for="loginUser">Username</label>
+      <input id="loginUser" type="text" autocomplete="username" placeholder="admin">
+    </div>
+    <div class="field">
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <button class="btn full" id="loginBtn" type="button">Log in</button>
+    <div class="err-msg" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD ================= -->
+<div id="dashboard">
+  <div class="dash-wrap">
+    <div class="sidebar">
+      <h2>AdmireDworld</h2>
+      <div class="brand-sub">Admin Dashboard</div>
+      <div class="nav-item active" data-section="overview">Overview</div>
+      <div class="nav-item" data-section="blog">AI Daily Blog</div>
+      <div class="nav-item" data-section="pkgIndia">India Packages</div>
+      <div class="nav-item" data-section="pkgIntl">International Packages</div>
+      <div class="nav-item" data-section="fixed">Fixed Departures</div>
+      <div class="nav-item" data-section="customize">Customize Package</div>
+      <div class="nav-item" data-section="bookings">Bookings</div>
+      <div class="nav-item" data-section="refer">Refer &amp; Earn</div>
+      <div class="nav-item" data-section="wedding">Destination Wedding</div>
+      <div class="nav-item" data-section="leads">Leads &amp; Conversions</div>
+      <div class="nav-item" data-section="offers">Festival Offers</div>
+      <div class="nav-item" data-section="taxi">Taxi Fares</div>
+      <div class="nav-item" data-section="settings">Settings</div>
+      <div class="sidebar-foot">
+        <button class="btn ghost small full" id="logoutBtn" type="button" style="color:#fff;border-color:rgba(255,255,255,0.3);">Log out</button>
+      </div>
+    </div>
+
+    <div class="main">
+
+      <!-- OVERVIEW -->
+      <div class="section active" id="sec-overview">
+        <div class="main-head"><h2>Overview</h2><button class="btn small ghost" onclick="loadOverview()">Refresh</button></div>
+        <div class="grid-cards" id="overviewCards"><div class="empty">Loading…</div></div>
+        <div class="card"><h3>Quick tips</h3>
+          <p class="muted">This dashboard uses the same <code>ADMIN_KEY</code> every module already checks — you just don't need to type it in anymore, it was fetched automatically when you logged in. Each section below matches one tab on the public site.</p>
+        </div>
+      </div>
+
+      <!-- BLOG -->
+      <div class="section" id="sec-blog">
+        <div class="main-head"><h2>AI Daily Blog</h2><button class="btn small ghost" onclick="loadBlog()">Refresh</button></div>
+        <div class="card">
+          <h3>Queue tomorrow's topic</h3>
+          <div class="form-grid">
+            <div class="field span2"><label>Topic</label><input id="blogTopicInput" placeholder="e.g. Best time to visit Kashmir"></div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" onclick="setBlogTopic()">Save topic</button></div>
+          <div class="ok-msg" id="blogMsg"></div>
+        </div>
+        <div class="card"><h3>Recent posts</h3><div id="blogList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- INDIA PACKAGES -->
+      <div class="section" id="sec-pkgIndia">
+        <div class="main-head"><h2>India Packages</h2><button class="btn small ghost" onclick="loadPackages('india')">Refresh</button></div>
+        <div class="card">
+          <h3>Add a package</h3>
+          <div id="pkgForm-india"></div>
+          <div style="margin-top:12px;">
+            <button class="btn" id="pkgSubmitBtn-india" onclick="addPackage('india')">Add package</button>
+            <button class="btn small ghost" id="pkgCancelBtn-india" onclick="cancelPkgEdit('india')" style="display:none;">Cancel edit</button>
+          </div>
+          <div class="ok-msg" id="pkgMsg-india"></div>
+        </div>
+        <div class="card"><h3>All packages</h3><div id="pkgList-india" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- INTERNATIONAL PACKAGES -->
+      <div class="section" id="sec-pkgIntl">
+        <div class="main-head"><h2>International Packages</h2><button class="btn small ghost" onclick="loadPackages('international')">Refresh</button></div>
+        <div class="card">
+          <h3>Add a package</h3>
+          <div id="pkgForm-international"></div>
+          <div style="margin-top:12px;">
+            <button class="btn" id="pkgSubmitBtn-international" onclick="addPackage('international')">Add package</button>
+            <button class="btn small ghost" id="pkgCancelBtn-international" onclick="cancelPkgEdit('international')" style="display:none;">Cancel edit</button>
+          </div>
+          <div class="ok-msg" id="pkgMsg-international"></div>
+        </div>
+        <div class="card"><h3>All packages</h3><div id="pkgList-international" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- FIXED DEPARTURES -->
+      <div class="section" id="sec-fixed">
+        <div class="main-head"><h2>Fixed Departures</h2><button class="btn small ghost" onclick="loadFixed()">Refresh</button></div>
+        <div class="card">
+          <h3>Add a fixed departure</h3>
+          <div class="form-grid">
+            <div class="field"><label>Name</label><input id="fxName" placeholder="e.g. Char Dham Yatra"></div>
+            <div class="field"><label>Route (e.g. City A · City B)</label><input id="fxLoc"></div>
+            <div class="field"><label>Duration tag (e.g. 11D/10N)</label><input id="fxDays"></div>
+            <div class="field"><label>Leaving from</label><input id="fxFromCity"></div>
+            <div class="field"><label>Badge (e.g. Guaranteed Departure)</label><input id="fxBadge"></div>
+            <div class="field"><label>Price per person (₹)</label><input id="fxPrice" type="number"></div>
+            <div class="field span2"><label>Short description</label><textarea id="fxShortDesc"></textarea></div>
+            <div class="field span2">
+              <label>Departure dates &amp; seats — one per line: <code>DD Mon YYYY | seats</code></label>
+              <textarea id="fxDateOptions" rows="3" placeholder="12 May 2027 | 8&#10;26 May 2027 | 14"></textarea>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn" id="fxSubmitBtn" onclick="addFixed()">Add fixed departure</button>
+            <button class="btn small ghost" id="fxCancelBtn" onclick="cancelFxEdit()" style="display:none;">Cancel edit</button>
+          </div>
+          <div class="ok-msg" id="fxMsg"></div>
+        </div>
+        <div class="card"><h3>All fixed departures</h3><div id="fxList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- CUSTOMIZE -->
+      <div class="section" id="sec-customize">
+        <div class="main-head"><h2>Customize Package</h2><button class="btn small ghost" onclick="loadCustomize()">Refresh</button></div>
+        <div class="tab-strip">
+          <button class="cz-tab active" data-cz="hotels">Hotels</button>
+          <button class="cz-tab" data-cz="sightseeing">Sightseeing</button>
+          <button class="cz-tab" data-cz="transfers">Pickup &amp; Drop</button>
+          <button class="cz-tab" data-cz="visas">Visas</button>
+          <button class="cz-tab" data-cz="tax">Tax &amp; Margin</button>
+          <button class="cz-tab" data-cz="enquiries">Enquiries</button>
+        </div>
+        <div class="subsection active" id="cz-sub-hotels">
+          <div class="card"><h3>Add hotel</h3><div id="czForm-hotels"></div>
+            <div style="margin-top:12px;">
+              <button class="btn" id="czSubmitBtn-hotels" onclick="addCzItem('hotels')">Add</button>
+              <button class="btn small ghost" id="czCancelBtn-hotels" onclick="cancelCzEdit('hotels')" style="display:none;">Cancel edit</button>
+            </div>
+            <div class="ok-msg" id="czMsg-hotels"></div></div>
+          <div class="card"><h3>All hotels</h3><div id="czList-hotels" class="empty">Loading…</div></div>
+        </div>
+        <div class="subsection" id="cz-sub-sightseeing">
+          <div class="card"><h3>Add sightseeing</h3><div id="czForm-sightseeing"></div>
+            <div style="margin-top:12px;">
+              <button class="btn" id="czSubmitBtn-sightseeing" onclick="addCzItem('sightseeing')">Add</button>
+              <button class="btn small ghost" id="czCancelBtn-sightseeing" onclick="cancelCzEdit('sightseeing')" style="display:none;">Cancel edit</button>
+            </div>
+            <div class="ok-msg" id="czMsg-sightseeing"></div></div>
+          <div class="card"><h3>All sightseeing</h3><div id="czList-sightseeing" class="empty">Loading…</div></div>
+        </div>
+        <div class="subsection" id="cz-sub-transfers">
+          <div class="card"><h3>Add pickup &amp; drop</h3><div id="czForm-transfers"></div>
+            <div style="margin-top:12px;">
+              <button class="btn" id="czSubmitBtn-transfers" onclick="addCzItem('transfers')">Add</button>
+              <button class="btn small ghost" id="czCancelBtn-transfers" onclick="cancelCzEdit('transfers')" style="display:none;">Cancel edit</button>
+            </div>
+            <div class="ok-msg" id="czMsg-transfers"></div></div>
+          <div class="card"><h3>All pickup &amp; drop</h3><div id="czList-transfers" class="empty">Loading…</div></div>
+        </div>
+        <div class="subsection" id="cz-sub-visas">
+          <div class="card"><h3>Add visa</h3><div id="czForm-visas"></div>
+            <div style="margin-top:12px;">
+              <button class="btn" id="czSubmitBtn-visas" onclick="addCzItem('visas')">Add</button>
+              <button class="btn small ghost" id="czCancelBtn-visas" onclick="cancelCzEdit('visas')" style="display:none;">Cancel edit</button>
+            </div>
+            <div class="ok-msg" id="czMsg-visas"></div></div>
+          <div class="card"><h3>All visas</h3><div id="czList-visas" class="empty">Loading…</div></div>
+        </div>
+        <div class="subsection" id="cz-sub-tax">
+          <div class="card">
+            <h3>Taxes, fees &amp; margin</h3>
+            <p class="muted" style="margin:0 0 14px;">These percentages are added automatically on top of hotel + sightseeing + pickup/drop + visa when the final total is calculated. Margin is applied first (your own markup on the base cost), then tax is applied on top of that. The customer never sees either as a separate line — both are always baked into the one combined total shown to them.</p>
+            <div class="form-grid">
+              <div class="field">
+                <label>GST / Service Tax (%)</label>
+                <input id="czTaxPercent" type="number" min="0" max="100" step="0.01">
+              </div>
+              <div class="field">
+                <label>Apna Margin (%)</label>
+                <input id="czMarginPercent" type="number" min="0" max="100" step="0.01" placeholder="Ex: 20">
+              </div>
+            </div>
+            <p class="muted" style="margin:10px 0 0;">Default is 0% — existing quotes/packages keep showing the exact same price until you set this above 0.</p>
+            <div style="margin-top:12px;"><button class="btn" onclick="saveCzTax()">Save</button></div>
+            <div class="ok-msg" id="czTaxMsg"></div>
+          </div>
+        </div>
+        <div class="subsection" id="cz-sub-enquiries">
+          <div class="card"><h3>Customize requests</h3><div id="czEnquiries" class="empty">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- BOOKINGS -->
+      <div class="section" id="sec-bookings">
+        <div class="main-head"><h2>Bookings</h2><div><button class="btn small" onclick="toggleOfflineBookingForm()">+ Add Offline Booking</button> <button class="btn small ghost" onclick="loadBookings()">Refresh</button></div></div>
+        <div class="card" id="offlineBookingCard" style="display:none;">
+          <h3>Add Offline Booking</h3>
+          <p class="muted" style="margin:0 0 12px;">The customer's account is created from their email (if new) and this booking appears in their My Bookings after they log in with email OTP.</p>
+          <div class="form-grid">
+            <div class="field"><label>Customer Name *</label><input id="obName"></div>
+            <div class="field"><label>Phone</label><input id="obPhone" type="tel" maxlength="10" placeholder="10 digits"></div>
+            <div class="field"><label>Email * (login id)</label><input id="obEmail" type="email"></div>
+            <div class="field span2"><label>Package *</label><select id="obPackage"><option value="">Loading packages…</option></select></div>
+            <div class="field"><label>Travel Date (optional)</label><input id="obTravelDate" type="date"></div>
+            <div class="field"><label>Destination (optional — package ka default use hoga)</label><input id="obDestination" placeholder="e.g. Jaipur, Udaipur"></div>
+            <div class="field"><label>No. of Pax</label><input id="obPax" type="number" min="1" value="1"></div>
+            <div class="field"><label>Trip Duration</label><input id="obDuration" placeholder="e.g. 5D/4N"></div>
+            <div class="field"><label>Total Payment (₹) *</label><input id="obTotal" type="number" min="0" oninput="obCalcBalance()"></div>
+            <div class="field"><label>Advance Payment (₹)</label><input id="obPaid" type="number" min="0" value="0" oninput="obCalcBalance()"></div>
+            <div class="field"><label>Balance Payment (auto)</label><input id="obBalance" readonly value="0"></div>
+            <div class="field"><label>Balance Payment Deadline</label><input id="obDueDate" type="date"></div>
+            <div class="field"><label>Booking Date</label><input id="obDate" type="date"></div>
+            <div class="field span2"><label>Remarks (internal, not shown to customer)</label><textarea id="obRemarks" rows="2"></textarea></div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" id="obSaveBtn" onclick="saveOfflineBooking()">Create booking</button></div>
+          <div class="ok-msg" id="obMsg"></div>
+        </div>
+        <div class="card" id="bookingEditCard" style="display:none;">
+          <h3>Edit Booking <span class="muted" id="beTitle"></span></h3>
+          <p class="muted" style="margin:0 0 12px;">Changes yahan save karte hi customer ke My Bookings mein update ho jate hain.</p>
+          <div class="form-grid">
+            <div class="field"><label>Destination</label><input id="beDestination"></div>
+            <div class="field"><label>Travel Date</label><input id="beTravelDate" type="date"></div>
+            <div class="field"><label>No. of Pax</label><input id="bePax" type="number" min="1"></div>
+            <div class="field"><label>Trip Duration</label><input id="beDuration" placeholder="e.g. 5D/4N"></div>
+            <div class="field"><label>Total Payment (₹)</label><input id="beTotal" type="number" min="0" oninput="beCalcBalance()"></div>
+            <div class="field"><label>Advance Payment (₹)</label><input id="beAdvance" type="number" min="0" oninput="beCalcBalance()"></div>
+            <div class="field"><label>Total Paid so far (₹)</label><input id="bePaid" type="number" min="0" oninput="beCalcBalance()"></div>
+            <div class="field"><label>Balance Payment (auto)</label><input id="beBalance" readonly value="0"></div>
+            <div class="field"><label>Balance Payment Deadline</label><input id="beDueDate" type="date"></div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" id="beSaveBtn" onclick="saveBookingEdit()">Save changes</button> <button class="btn ghost" onclick="closeBookingEdit()">Cancel</button></div>
+          <div class="ok-msg" id="beMsg"></div>
+        </div>
+        <input type="file" id="bkVoucherFile" accept="application/pdf,.pdf" style="display:none;">
+        <div class="card"><div id="bookingsList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- REFER & EARN -->
+      <div class="section" id="sec-refer">
+        <div class="main-head"><h2>Refer &amp; Earn</h2><button class="btn small ghost" onclick="loadRefer()">Refresh</button></div>
+        <div class="card"><div id="referList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- WEDDING -->
+      <div class="section" id="sec-wedding">
+        <div class="main-head"><h2>Destination Wedding</h2><button class="btn small ghost" onclick="loadWedding()">Refresh</button></div>
+        <div class="tab-strip">
+          <button class="wd-tab active" data-wd="venues">Venues</button>
+          <button class="wd-tab" data-wd="enquiries">Enquiries</button>
+        </div>
+        <div class="subsection active" id="wd-sub-venues">
+          <div class="card"><h3>Add venue</h3>
+            <div class="form-grid">
+              <div class="field"><label>Name</label><input id="wdName"></div>
+              <div class="field"><label>Destination</label><input id="wdDestination"></div>
+              <div class="field"><label>Tag</label><input id="wdTag" placeholder="e.g. Beach &amp; Cliff"></div>
+              <div class="field"><label>Guest range</label><input id="wdGuestRange" placeholder="e.g. 50–200 guests"></div>
+              <div class="field"><label>Approx. cost (₹)</label><input id="wdPrice" type="number"></div>
+              <div class="field"><label>Hotel category</label><input id="wdHotelCategory" placeholder="e.g. 5-star, 4-star heritage"></div>
+              <div class="field"><label>No. of rooms</label><input id="wdRooms" type="number" min="0"></div>
+              <div class="field"><label>Lawn area</label><input id="wdLawnArea" placeholder="e.g. 10,000 sq.ft."></div>
+              <div class="field"><label>Swimming pool available?</label>
+                <select id="wdPool">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+              <div class="field"><label>Rating (out of 5)</label><input id="wdRating" type="number" min="1" max="5" step="0.1" placeholder="e.g. 4.8"></div>
+              <div class="field"><label>Review count</label><input id="wdReviewCount" type="number" min="0" placeholder="e.g. 150"></div>
+              <div class="field span2"><label>Image URL (optional — leave blank for an auto-generated AI photo)</label><input id="wdImageUrl" placeholder="https://..."></div>
+              <div class="field span2"><label>Description</label><textarea id="wdDesc"></textarea></div>
+            </div>
+            <div style="margin-top:12px;"><button class="btn" onclick="addVenue()">Add venue</button></div>
+            <div class="ok-msg" id="wdMsg"></div>
+          </div>
+          <div class="card"><h3>All venues</h3><div id="wdList" class="empty">Loading…</div></div>
+        </div>
+        <div class="subsection" id="wd-sub-enquiries">
+          <div class="card"><h3>Wedding enquiries</h3><div id="wdEnquiries" class="empty">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- LEADS -->
+      <div class="section" id="sec-leads">
+        <div class="main-head"><h2>Leads &amp; Conversions</h2><button class="btn small ghost" onclick="loadLeads()">Refresh</button></div>
+        <div class="grid-cards" id="leadsStats"></div>
+        <div class="card"><div id="leadsList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- FESTIVAL OFFERS (popup on home page) -->
+      <div class="section" id="sec-offers">
+        <div class="main-head"><h2>Festival Offers</h2><button class="btn small ghost" onclick="loadOffers()">Refresh</button></div>
+        <div class="card">
+          <h3>Upload a new offer popup</h3>
+          <p class="muted" style="margin-top:-6px;">The offer that is switched ON is shown to every visitor on the home page, 3 seconds after it opens. Only one offer can be ON at a time — switching one ON turns the others OFF. Image: JPG / PNG / WEBP / GIF, max 3 MB.</p>
+          <div class="form-grid">
+            <div class="field"><label>Title (e.g. Navratri Special Offer)</label><input id="ofTitle" maxlength="80" placeholder="Navratri Special Offer"></div>
+            <div class="field"><label>Offer image</label><input id="ofImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></div>
+            <div class="field span2">
+              <label><input type="checkbox" id="ofActive" checked style="width:auto;margin-right:6px;">Turn this offer ON right after uploading</label>
+            </div>
+            <div class="field span2"><img id="ofPreview" alt="" style="display:none;max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--line);"></div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" id="ofSubmitBtn" onclick="addOffer()">Upload offer</button></div>
+          <div class="ok-msg" id="ofMsg"></div>
+        </div>
+        <div class="card"><h3>All offers</h3><div id="ofList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- TAXI FARES (public "Taxi Service — Fare Calculator" page) -->
+      <div class="section" id="sec-taxi">
+        <div class="main-head"><h2>Taxi Fares</h2><button class="btn small ghost" onclick="loadTaxi()">Refresh</button></div>
+        <div class="card">
+          <h3 id="txFormTitle">Add a taxi route</h3>
+          <p class="muted" style="margin-top:-6px;">Every city and price on the website's <b>Taxi Service — Fare Calculator</b> page comes from here. Changes show on the site within about 30 seconds. Leave a price empty (or 0) to show "On request". With "both ways" ON, the same fare also works for To → From.</p>
+          <div class="form-grid">
+            <div class="field"><label>From city</label><input id="txFrom" maxlength="60" placeholder="Haldwani"></div>
+            <div class="field"><label>To city</label><input id="txTo" maxlength="60" placeholder="Nainital"></div>
+            <div class="field"><label>Distance (KM)</label><input id="txKm" inputmode="decimal" placeholder="35"></div>
+            <div class="field"><label>Sedan price (₹)</label><input id="txSedan" inputmode="numeric" placeholder="1500"></div>
+            <div class="field"><label>Ertiga price (₹)</label><input id="txErtiga" inputmode="numeric" placeholder="2000"></div>
+            <div class="field"><label>Innova price (₹)</label><input id="txInnova" inputmode="numeric" placeholder="2500"></div>
+            <div class="field"><label>Tempo Traveller price (₹)</label><input id="txTempo" inputmode="numeric" placeholder="4000"></div>
+            <div class="field">
+              <label><input type="checkbox" id="txBoth" checked style="width:auto;margin-right:6px;">Same fare both ways (To → From too)</label>
+              <label><input type="checkbox" id="txActive" checked style="width:auto;margin-right:6px;">Show on website</label>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn" id="txSaveBtn" onclick="saveTaxiRoute()">Add route</button>
+            <button class="btn ghost" id="txCancelBtn" style="display:none;" onclick="resetTaxiForm()">Cancel edit</button>
+          </div>
+          <div class="ok-msg" id="txMsg"></div>
+        </div>
+        <div class="card">
+          <h3>Bulk add / update (paste many routes at once)</h3>
+          <p class="muted" style="margin-top:-6px;">One route per line: <code>From, To, KM, Sedan, Ertiga, Innova, Tempo Traveller</code>. A From + To pair that already exists is updated, new ones are added. You can paste straight from Excel / Google Sheets too.</p>
+          <div class="field"><textarea id="txBulk" rows="5" placeholder="Haldwani, Bhimtal, 22, 1200, 1700, 2200, 3500&#10;Haldwani, Ranikhet, 80, 2500, 3200, 4000, 6500"></textarea></div>
+          <button class="btn" id="txBulkBtn" onclick="bulkTaxi()">Import routes</button>
+          <div class="ok-msg" id="txBulkMsg"></div>
+        </div>
+        <div class="card"><h3>All routes</h3><div id="txList" class="empty">Loading…</div></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="section" id="sec-settings">
+        <div class="main-head"><h2>Settings</h2><button class="btn small ghost" onclick="loadSettings()">Refresh</button></div>
+        <div class="card">
+          <h3>Contact details</h3>
+          <p class="muted" style="margin-top:-6px;">Shown in the site footer and used for every "Chat on WhatsApp" button. Changes apply the next time a visitor loads the page.</p>
+          <div class="form-grid">
+            <div class="field"><label>Contact email</label><input id="stgEmail" placeholder="hello@admiredworld.travel"></div>
+            <div class="field"><label>WhatsApp number (with country code, digits only)</label><input id="stgWhatsapp" placeholder="e.g. 919639343585"></div>
+            <div class="field"><label>Primary phone (shown in footer)</label><input id="stgPhone" placeholder="e.g. +91 96393 43585"></div>
+            <div class="field"><label>Secondary phone (optional, shown in footer)</label><input id="stgPhoneAlt" placeholder="e.g. +91 78381 91329"></div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" onclick="saveSettings()">Save changes</button></div>
+          <div class="ok-msg" id="stgMsg"></div>
+        </div>
+
+        <div class="card">
+          <h3>AI Content Provider</h3>
+          <p class="muted" style="margin-top:-6px;">Controls what writes the daily blog post and the weekly auto-added package. Switching provider or updating a key here takes effect on the very next post — no code change or redeploy needed. If the selected provider ever fails (bad/expired key, quota, etc.), it automatically falls back to the free option so content generation is never blocked.</p>
+          <div class="form-grid">
+            <div class="field">
+              <label>Text provider (writes the blog post / package copy)</label>
+              <select id="aiTextProvider">
+                <option value="gemini">Gemini (Google AI Studio)</option>
+                <option value="openai">OpenAI</option>
+                <option value="pollinations">Free — Pollinations (no key needed)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Gemini API key</label>
+              <input id="aiGeminiKey" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>OpenAI API key (optional, only used if provider above is OpenAI)</label>
+              <input id="aiOpenaiKey" placeholder="sk-..." autocomplete="off">
+            </div>
+            <div class="field">
+              <label>Cover image source (photo shown above each blog post / package)</label>
+              <select id="aiImageProvider">
+                <option value="pexels">Pexels — real travel photos</option>
+                <option value="pollinations">Free — AI-generated (no key needed)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Pexels API key</label>
+              <input id="aiPexelsKey" placeholder="e.g. 21MuDKyGYocckoXv7RwjrL4aGXSV9sb6R5ePInpfYAQnMArnfziN2bZt" autocomplete="off">
+            </div>
+          </div>
+          <div style="margin-top:12px;"><button class="btn" onclick="saveAiSettings()">Save AI provider</button></div>
+          <div class="ok-msg" id="aiMsg"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================
+   AdmireDworld Travel — Admin Dashboard logic
+   Point API_BASE_URL at your deployed backend, same as
+   frontend/script.js (see backend/README-DEPLOY.md).
+=========================================================== */
+const API_BASE_URL = "https://tourpackagewala-backend.onrender.com"; // <-- Render backend URL
+
+let session = { token: null, adminKey: null };
+
+/* ---------- small helpers ---------- */
+function money(n){ return "₹" + Number(n||0).toLocaleString("en-IN"); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(s){ if(!s) return "-"; try{ return new Date(s).toLocaleString("en-IN"); }catch{ return s; } }
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 2600);
+}
+function parseDayWise(text){
+  // Backward compatible with the simple "Title | Description" one-line-per-day
+  // format, but also tolerant of full multi-line itineraries pasted in from
+  // AI tools (ChatGPT etc.) that use "## Day 1: ..." headers, "---" section
+  // breaks, and **bold**/markdown — those used to each become a separate,
+  // garbled "day". Now they get grouped and cleaned properly.
+  const stripMd = (s) => String(s || "")
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .trim();
+
+  const lines = String(text || "").split("\n").map(l => l.trim());
+  const days = [];
+  let current = null;
+
+  for (const line of lines) {
+    if (!line) continue;                 // blank line — paragraph gap, skip
+    if (/^-{3,}$/.test(line)) continue;   // "---" separator, skip
+
+    // "## Day 1: Title" / "Day 1 - Title" / "Day 1: Title" header
+    const headerMatch = line.match(/^#{0,6}\s*day\s*\d+\s*[:\-–—]?\s*(.*)$/i);
+    if (headerMatch) {
+      current = { day: days.length + 1, title: stripMd(headerMatch[1]) || `Day ${days.length + 1}`, desc: "" };
+      days.push(current);
+      continue;
+    }
+
+    // Classic one-line "Title | Description" format
+    if (line.includes("|")) {
+      const [title, ...rest] = line.split("|");
+      current = { day: days.length + 1, title: stripMd(title), desc: stripMd(rest.join("|")) };
+      days.push(current);
+      continue;
+    }
+
+    // Plain continuation line — append to the current day, or start a new
+    // day if nothing has started yet.
+    const cleaned = stripMd(line);
+    if (!cleaned) continue;
+    if (current) {
+      current.desc = current.desc ? `${current.desc} ${cleaned}` : cleaned;
+    } else {
+      current = { day: days.length + 1, title: cleaned, desc: "" };
+      days.push(current);
+    }
+  }
+  return days;
+}
+function parseList(text){ return String(text||"").split(",").map(s=>s.trim()).filter(Boolean); }
+
+/* ---------- API helpers: adminKey is attached automatically ---------- */
+async function apiGetPublic(path){
+  const res = await fetch(`${API_BASE_URL}${path}`);
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
+async function apiGetAdmin(path){
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(`${API_BASE_URL}${path}${sep}adminKey=${encodeURIComponent(session.adminKey||"")}`, {
+    headers: { "x-admin-key": session.adminKey || "" },
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
+async function apiSendAdmin(path, method, body){
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", "x-admin-key": session.adminKey || "" },
+    body: JSON.stringify({ ...(body||{}), adminKey: session.adminKey || "" }),
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
+
+/* ---------- Login / session ---------- */
+function saveSession(){
+  sessionStorage.setItem("aw_admin_token", session.token || "");
+  sessionStorage.setItem("aw_admin_key", session.adminKey || "");
+}
+function clearSession(){
+  session = { token:null, adminKey:null };
+  sessionStorage.removeItem("aw_admin_token");
+  sessionStorage.removeItem("aw_admin_key");
+}
+function showDashboard(){
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+  loadOverview();
+}
+function showLogin(err){
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("loginErr").textContent = err || "";
+}
+
+async function doLogin(){
+  const username = document.getElementById("loginUser").value.trim();
+  const password = document.getElementById("loginPass").value;
+  const errEl = document.getElementById("loginErr");
+  errEl.textContent = "";
+  if(!username || !password){ errEl.textContent = "Please enter both username and password."; return; }
+  try{
+    const res = await fetch(`${API_BASE_URL}/api/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || "Invalid username or password.");
+    session.token = data.token;
+    session.adminKey = data.adminKey;
+    saveSession();
+    showDashboard();
+  }catch(err){
+    errEl.textContent = err.message;
+  }
+}
+document.getElementById("loginBtn").addEventListener("click", doLogin);
+document.getElementById("loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+document.getElementById("loginUser").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+document.getElementById("logoutBtn").addEventListener("click", ()=>{ clearSession(); showLogin(); });
+
+async function tryRestoreSession(){
+  const token = sessionStorage.getItem("aw_admin_token");
+  const adminKey = sessionStorage.getItem("aw_admin_key");
+  if(!token){ showLogin(); return; }
+  try{
+    const res = await fetch(`${API_BASE_URL}/api/admin/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok) throw new Error();
+    session.token = token;
+    session.adminKey = data.adminKey || adminKey;
+    saveSession();
+    showDashboard();
+  }catch{
+    clearSession();
+    showLogin();
+  }
+}
+
+/* ---------- Sidebar navigation ---------- */
+document.querySelectorAll(".nav-item").forEach(item=>{
+  item.addEventListener("click", ()=>{
+    document.querySelectorAll(".nav-item").forEach(i=>i.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+    item.classList.add("active");
+    document.getElementById("sec-"+item.dataset.section).classList.add("active");
+    const loaders = {
+      overview: loadOverview, blog: loadBlog, pkgIndia: ()=>loadPackages("india"),
+      pkgIntl: ()=>loadPackages("international"), fixed: loadFixed, customize: loadCustomize,
+      bookings: loadBookings, refer: loadRefer, wedding: loadWedding, leads: loadLeads, offers: loadOffers, taxi: loadTaxi, settings: loadSettings,
+    };
+    (loaders[item.dataset.section] || (()=>{}))();
+  });
+});
+
+/* ---------- OVERVIEW ---------- */
+async function loadOverview(){
+  const el = document.getElementById("overviewCards");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const cards = [];
+  try{
+    const [blog, india, intl, bookings, refer, leads, wedding, customize, fixed] = await Promise.allSettled([
+      apiGetPublic("/api/blog/list"),
+      apiGetPublic("/api/packages/india"),
+      apiGetPublic("/api/packages/international"),
+      apiGetAdmin("/api/bookings/admin/all"),
+      apiGetAdmin("/api/refer/admin/all"),
+      apiGetAdmin("/api/leads/admin/all"),
+      apiGetAdmin("/api/wedding/admin/enquiries"),
+      apiGetAdmin("/api/customize/admin/enquiries"),
+      apiGetPublic("/api/fixed"),
+    ]);
+    const push = (label, val) => cards.push(`<div class="stat-card"><div class="num">${val}</div><div class="lbl">${label}</div></div>`);
+    push("Blog posts", blog.status==="fulfilled" ? (blog.value.posts||[]).length : "-");
+    push("India packages", india.status==="fulfilled" ? (india.value.packages||[]).length : "-");
+    push("Intl packages", intl.status==="fulfilled" ? (intl.value.packages||[]).length : "-");
+    if(bookings.status==="fulfilled"){
+      const all = bookings.value.bookings || [];
+      push("Bookings (pending)", all.filter(b=>b.status==="pending").length);
+      push("Bookings (confirmed)", all.filter(b=>b.status==="confirmed").length);
+    } else push("Bookings", "-");
+    if(refer.status==="fulfilled"){
+      const rows = refer.value.referrers || [];
+      const totalEarned = rows.reduce((s,r)=>s+(r.rewardEarned||0),0);
+      push("Referrers", rows.length);
+      push("Referral payouts due", money(totalEarned));
+    } else push("Referrers", "-");
+    push("Leads (total)", leads.status==="fulfilled" ? leads.value.total : "-");
+    push("Wedding enquiries", wedding.status==="fulfilled" ? (wedding.value.enquiries||[]).length : "-");
+    push("Customize requests", customize.status==="fulfilled" ? (customize.value.enquiries||[]).length : "-");
+    if(fixed.status==="fulfilled"){
+      const deps = fixed.value.departures || [];
+      const totalSeats = deps.reduce((s,d)=>s+(d.totalSeatsLeft||0),0);
+      push("Fixed departures", deps.length);
+      push("Fixed dep. seats left", totalSeats);
+    } else push("Fixed departures", "-");
+    el.innerHTML = cards.join("");
+  }catch(err){
+    el.innerHTML = '<div class="empty">Could not load overview.</div>';
+  }
+}
+
+/* ---------- BLOG ---------- */
+async function loadBlog(){
+  const el = document.getElementById("blogList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetPublic("/api/blog/list");
+    const posts = data.posts || [];
+    if(!posts.length){ el.innerHTML = '<div class="empty">No posts yet.</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Date</th><th>Title</th><th>Topic</th><th></th></tr></thead><tbody>
+      ${posts.map(p=>{
+        const pid = p.id != null ? p.id : (p._id != null ? p._id : (p.slug != null ? p.slug : p.date));
+        return `<tr>
+          <td>${esc(p.date)}</td>
+          <td>${esc(p.title)}</td>
+          <td>${esc(p.topic)}</td>
+          <td><button class="btn small coral" data-del-blog="${esc(pid)}">Delete</button></td>
+        </tr>`;
+      }).join("")}
+      </tbody></table>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-del-blog]");
+  if(!btn) return;
+  if(!confirm("Delete this blog post? It cannot be restored.")) return;
+  try{
+    await apiSendAdmin(`/api/blog/${encodeURIComponent(btn.dataset.delBlog)}`, "DELETE");
+    showToast("Blog post deleted");
+    loadBlog();
+    loadOverview();
+  }catch(err){ showToast(err.message); }
+});
+async function setBlogTopic(){
+  const msg = document.getElementById("blogMsg");
+  const topic = document.getElementById("blogTopicInput").value.trim();
+  msg.textContent = "";
+  if(!topic){ msg.style.color="var(--coral-deep)"; msg.textContent = "Please enter a topic."; return; }
+  try{
+    await apiSendAdmin("/api/blog/set-topic", "POST", { topic });
+    msg.style.color = "var(--teal-deep)";
+    msg.textContent = "Topic queued for the next post.";
+    document.getElementById("blogTopicInput").value = "";
+    showToast("Blog topic saved");
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- PACKAGES (india / international) ---------- */
+const PKG_FORM_FIELDS = [
+  { id:"name", label:"Name", span:1 },
+  { id:"loc", label:"Route (e.g. City A · City B)", span:1 },
+  { id:"destination", label:"Destination (full)", span:1 },
+  { id:"tag", label:"Duration tag (e.g. 6D/5N)", span:1 },
+  { id:"cat", label:"Category (e.g. hills, beach, city)", span:1 },
+  { id:"hotelCategory", label:"Hotel category (e.g. 4-star)", span:1 },
+  { id:"hotelName", label:"Hotel name (e.g. Radisson Blu, or similar)", span:1 },
+  { id:"price", label:"Price (₹)", span:1, type:"number" },
+  { id:"discountPrice", label:"Discount price (₹, optional)", span:1, type:"number" },
+  { id:"desc", label:"Short description", span:2, type:"textarea" },
+  { id:"dayWise", label:"Day-wise itinerary — either \"Title | Description\" one line per day, OR paste a full AI-written itinerary as-is (## Day 1: ..., **bold**, --- breaks all handled automatically)", span:2, type:"textarea" },
+  { id:"inclusions", label:"Inclusions (comma separated)", span:2, type:"textarea" },
+  { id:"exclusions", label:"Exclusions (comma separated)", span:2, type:"textarea" },
+  { id:"imageUrl", label:"Package photo link (optional — paste a https:// photo link, OR choose a file below; leave both empty for an auto photo)", span:2 },
+];
+function buildPkgForm(kind){
+  const host = document.getElementById(`pkgForm-${kind}`);
+  if(host.dataset.built) return;
+  host.dataset.built = "1";
+  host.innerHTML = `<div class="form-grid">${PKG_FORM_FIELDS.map(f=>`
+    <div class="field ${f.span===2?"span2":""}">
+      <label>${f.label}</label>
+      ${f.type==="textarea" ? `<textarea id="pkg-${kind}-${f.id}"></textarea>` : `<input id="pkg-${kind}-${f.id}" type="${f.type||"text"}">`}
+    </div>`).join("")}
+    <div class="field span2">
+      <label>…or upload a photo from your phone/computer (saved permanently; if you choose a file it is used instead of the link)</label>
+      <input id="pkg-${kind}-imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+      <img id="pkg-${kind}-imgPreview" alt="" style="display:none;max-width:220px;max-height:150px;object-fit:cover;border-radius:8px;margin-top:8px;">
+    </div></div>`;
+}
+
+/* ---------- Package photo: preview + shrink big phone photos + upload ---------- */
+function updatePkgPreview(kind){
+  const img = document.getElementById(`pkg-${kind}-imgPreview`);
+  if(!img) return;
+  const fileEl = document.getElementById(`pkg-${kind}-imageFile`);
+  const linkEl = document.getElementById(`pkg-${kind}-imageUrl`);
+  const file = fileEl && fileEl.files[0];
+  const src = file ? URL.createObjectURL(file) : ((linkEl && linkEl.value.trim()) || "");
+  if(src){ img.src = src; img.style.display = "block"; } else { img.removeAttribute("src"); img.style.display = "none"; }
+}
+document.addEventListener("change", (e)=>{
+  const m = /^pkg-(india|international)-imageFile$/.exec(e.target.id || "");
+  if(m) updatePkgPreview(m[1]);
+});
+document.addEventListener("input", (e)=>{
+  const m = /^pkg-(india|international)-imageUrl$/.exec(e.target.id || "");
+  if(m) updatePkgPreview(m[1]);
+});
+// Phone photos are often 4-10 MB: scale to max 1600px wide JPEG first (looks the same, loads fast, fits the limit).
+function compressPkgImage(file, maxW, quality){
+  return new Promise((resolve)=>{
+    if(!/^image\/(jpeg|png|webp)$/i.test(file.type)) return resolve(file); // GIFs are sent as-is
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = ()=>{
+      URL.revokeObjectURL(url);
+      let w = im.naturalWidth, h = im.naturalHeight;
+      if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(im,0,0,w,h);
+      c.toBlob((b)=> resolve(b && b.size < file.size ? new File([b], "photo.jpg", { type:"image/jpeg" }) : file), "image/jpeg", quality);
+    };
+    im.onerror = ()=>{ URL.revokeObjectURL(url); resolve(file); };
+    im.src = url;
+  });
+}
+async function uploadPkgImage(file){
+  const f = await compressPkgImage(file, 1600, 0.85);
+  if(f.size > 5*1024*1024) throw new Error("Image is too large (max 5 MB).");
+  const fd = new FormData();
+  fd.append("image", f);
+  // multipart: do NOT set Content-Type (the browser adds the boundary); admin key goes in the header
+  const res = await fetch(`${API_BASE_URL}/api/packages/image`, {
+    method: "POST",
+    headers: { "x-admin-key": session.adminKey || "" },
+    body: fd,
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || "Image upload failed.");
+  return data.imageUrl;
+}
+let pkgEditId = { india: null, international: null };
+function dayWiseToText(dayWise){
+  return (dayWise||[]).map(d=>`${d.title||""} | ${d.desc||""}`).join("\n");
+}
+async function loadPackages(kind){
+  buildPkgForm(kind);
+  const el = document.getElementById(`pkgList-${kind}`);
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetPublic(`/api/packages/${kind}`);
+    const pkgs = data.packages || [];
+    if(!pkgs.length){ el.innerHTML = '<div class="empty">No packages yet.</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Source</th><th>Name</th><th>Route</th><th>Price</th><th></th></tr></thead><tbody>
+      ${pkgs.map(p=>`<tr>
+        <td><span class="badge-src">${esc(p.source)}</span></td>
+        <td>${esc(p.name)}</td>
+        <td>${esc(p.loc)}</td>
+        <td>${money(p.discountPrice||p.price)}${p.discountPrice?` <span class="muted" style="text-decoration:line-through;">${money(p.price)}</span>`:""}</td>
+        <td>
+          <button class="btn small ghost" data-edit-pkg="${p.id}" data-kind="${kind}">Edit</button>
+          <button class="btn small coral" data-del-pkg="${p.id}" data-kind="${kind}">Delete</button>
+        </td>
+      </tr>`).join("")}</tbody></table>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-del-pkg]");
+  if(!btn) return;
+  if(!confirm("Delete this package?")) return;
+  try{
+    await apiSendAdmin(`/api/packages/${btn.dataset.kind}/${btn.dataset.delPkg}`, "DELETE");
+    showToast("Package deleted");
+    loadPackages(btn.dataset.kind);
+  }catch(err){ showToast(err.message); }
+});
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-edit-pkg]");
+  if(!btn) return;
+  const kind = btn.dataset.kind;
+  const id = btn.dataset.editPkg;
+  try{
+    const data = await apiGetPublic(`/api/packages/${kind}/${id}`);
+    const p = data.package || {};
+    buildPkgForm(kind);
+    const set = (fid, val) => { const el = document.getElementById(`pkg-${kind}-${fid}`); if(el) el.value = val ?? ""; };
+    set("name", p.name); set("loc", p.loc); set("destination", p.destination);
+    set("tag", p.tag); set("cat", p.cat); set("hotelCategory", p.hotelCategory);
+    set("hotelName", p.hotelName); set("price", p.price); set("discountPrice", p.discountPrice);
+    set("desc", p.desc); set("dayWise", dayWiseToText(p.dayWise));
+    set("inclusions", (p.inclusions||[]).join(", ")); set("exclusions", (p.exclusions||[]).join(", "));
+    set("imageUrl", p.imageUrl);
+    const fileEl = document.getElementById(`pkg-${kind}-imageFile`); if(fileEl) fileEl.value = "";
+    updatePkgPreview(kind);
+    pkgEditId[kind] = id;
+    document.getElementById(`pkgSubmitBtn-${kind}`).textContent = "Save changes";
+    document.getElementById(`pkgCancelBtn-${kind}`).style.display = "inline-block";
+    document.getElementById(`pkgForm-${kind}`).scrollIntoView({ behavior: "smooth", block: "center" });
+  }catch(err){ showToast(err.message); }
+});
+function cancelPkgEdit(kind){
+  pkgEditId[kind] = null;
+  document.getElementById(`pkgSubmitBtn-${kind}`).textContent = "Add package";
+  document.getElementById(`pkgCancelBtn-${kind}`).style.display = "none";
+  PKG_FORM_FIELDS.forEach(f=>{ const el = document.getElementById(`pkg-${kind}-${f.id}`); if(el) el.value=""; });
+  const fileEl = document.getElementById(`pkg-${kind}-imageFile`); if(fileEl) fileEl.value = "";
+  updatePkgPreview(kind);
+}
+async function addPackage(kind){
+  const msg = document.getElementById(`pkgMsg-${kind}`);
+  msg.textContent = "";
+  const get = id => document.getElementById(`pkg-${kind}-${id}`).value;
+  const body = {
+    name: get("name").trim(), loc: get("loc").trim(), destination: get("destination").trim(),
+    tag: get("tag").trim(), cat: get("cat").trim(), hotelCategory: get("hotelCategory").trim(),
+    hotelName: get("hotelName").trim(),
+    price: get("price"), discountPrice: get("discountPrice") || undefined,
+    desc: get("desc").trim(), dayWise: parseDayWise(get("dayWise")),
+    inclusions: parseList(get("inclusions")), exclusions: parseList(get("exclusions")),
+    imageUrl: get("imageUrl").trim(),
+  };
+  if(!body.name || !body.loc){ msg.style.color="var(--coral-deep)"; msg.textContent = "Name and route are required."; return; }
+  const editingId = pkgEditId[kind];
+  const photoFile = (document.getElementById(`pkg-${kind}-imageFile`) || {}).files?.[0];
+  try{
+    if(photoFile){
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Uploading photo…";
+      body.imageUrl = await uploadPkgImage(photoFile);
+    }
+    if(editingId){
+      await apiSendAdmin(`/api/packages/${kind}/${editingId}`, "PUT", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Package updated.";
+      showToast("Package updated");
+    } else {
+      await apiSendAdmin(`/api/packages/${kind}`, "POST", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Package added.";
+      showToast("Package added");
+    }
+    cancelPkgEdit(kind);
+    loadPackages(kind);
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- FIXED DEPARTURES ---------- */
+function parseFixedDateOptions(text){
+  return String(text||"").split("\n").map(l=>l.trim()).filter(Boolean).map(line=>{
+    const [datePart, seatsPart] = line.split("|");
+    const date = (datePart||"").trim();
+    const bits = date.split(" "); // "12 May 2027" -> ["12","May","2027"]
+    return { date, d: bits[0]||"", m: bits[1]||"", seats: Number((seatsPart||"").trim()) || 0 };
+  });
+}
+function fixedDateOptionsToText(dateOptions){
+  return (dateOptions||[]).map(o=>`${o.date} | ${o.seats}`).join("\n");
+}
+let fxEditId = null;
+
+async function loadFixed(){
+  const el = document.getElementById("fxList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetPublic("/api/fixed");
+    const deps = data.departures || [];
+    if(!deps.length){ el.innerHTML = '<div class="empty">No fixed departures yet.</div>'; return; }
+    el.innerHTML = deps.map(f=>`
+      <div class="card" style="margin-bottom:14px;" data-fx-card="${f.id}">
+        <div class="main-head" style="margin-bottom:8px;">
+          <div>
+            <strong>${esc(f.name)}</strong><br>
+            <span class="muted">${esc(f.loc)} · ${esc(f.days)} · from ${esc(f.fromCity||"-")}</span>
+          </div>
+          <div>
+            <button class="btn small ghost" data-fx-toggle="${f.id}">Manage dates &amp; seats</button>
+            <button class="btn small ghost" data-fx-edit="${f.id}">Edit</button>
+            <button class="btn small coral" data-fx-delete="${f.id}">Delete</button>
+          </div>
+        </div>
+        <div class="muted">${money(f.price)} per person · ${f.totalSeatsLeft} total seats left across ${(f.dateOptions||[]).length} date(s)</div>
+        <div id="fx-manage-${f.id}" style="display:none; margin-top:14px;">
+          <table><thead><tr><th>Date</th><th>Seats left</th><th></th></tr></thead><tbody id="fx-dates-${f.id}">
+            ${(f.dateOptions||[]).map(o=>`
+              <tr>
+                <td>${esc(o.date)}</td>
+                <td><input type="number" min="0" style="width:80px;" id="fx-seats-${f.id}-${esc(o.date)}" value="${o.seats}"></td>
+                <td>
+                  <button class="btn small" data-fx-save-date="${f.id}" data-fx-date="${esc(o.date)}" data-fx-d="${esc(o.d)}" data-fx-m="${esc(o.m)}">Save</button>
+                  <button class="btn small coral" data-fx-del-date="${f.id}" data-fx-date="${esc(o.date)}">Remove</button>
+                </td>
+              </tr>`).join("")}
+          </tbody></table>
+          <div class="form-grid" style="margin-top:10px;">
+            <div class="field"><label>New date (e.g. 12 May 2027)</label><input id="fx-new-date-${f.id}"></div>
+            <div class="field"><label>Seats</label><input id="fx-new-seats-${f.id}" type="number" min="0"></div>
+          </div>
+          <button class="btn small" style="margin-top:8px;" data-fx-add-date="${f.id}">Add date</button>
+        </div>
+      </div>`).join("");
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+
+document.addEventListener("click", async (e)=>{
+  const toggleBtn = e.target.closest("[data-fx-toggle]");
+  if(toggleBtn){
+    const panel = document.getElementById(`fx-manage-${toggleBtn.dataset.fxToggle}`);
+    if(panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+    return;
+  }
+
+  const editBtn = e.target.closest("[data-fx-edit]");
+  if(editBtn){
+    try{
+      const data = await apiGetPublic(`/api/fixed/${editBtn.dataset.fxEdit}`);
+      const f = data.departure || {};
+      document.getElementById("fxName").value = f.name || "";
+      document.getElementById("fxLoc").value = f.loc || "";
+      document.getElementById("fxDays").value = f.days || "";
+      document.getElementById("fxFromCity").value = f.fromCity || "";
+      document.getElementById("fxBadge").value = f.badge || "";
+      document.getElementById("fxPrice").value = f.price || "";
+      document.getElementById("fxShortDesc").value = f.shortDesc || "";
+      document.getElementById("fxDateOptions").value = fixedDateOptionsToText(f.dateOptions);
+      fxEditId = f.id;
+      document.getElementById("fxSubmitBtn").textContent = "Save changes";
+      document.getElementById("fxCancelBtn").style.display = "inline-block";
+      document.getElementById("fxName").scrollIntoView({ behavior: "smooth", block: "center" });
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const delBtn = e.target.closest("[data-fx-delete]");
+  if(delBtn){
+    if(!confirm("Delete this fixed departure entirely?")) return;
+    try{
+      await apiSendAdmin(`/api/fixed/${delBtn.dataset.fxDelete}`, "DELETE");
+      showToast("Fixed departure deleted");
+      loadFixed();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const saveDateBtn = e.target.closest("[data-fx-save-date]");
+  if(saveDateBtn){
+    const id = saveDateBtn.dataset.fxSaveDate;
+    const date = saveDateBtn.dataset.fxDate;
+    const seatsInput = document.getElementById(`fx-seats-${id}-${date}`);
+    const seats = seatsInput ? Number(seatsInput.value) : 0;
+    try{
+      await apiSendAdmin(`/api/fixed/${id}/dates`, "PUT", { date, d: saveDateBtn.dataset.fxD, m: saveDateBtn.dataset.fxM, seats });
+      showToast("Seats updated");
+      loadFixed();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const delDateBtn = e.target.closest("[data-fx-del-date]");
+  if(delDateBtn){
+    if(!confirm("Remove this date option?")) return;
+    try{
+      await apiSendAdmin(`/api/fixed/${delDateBtn.dataset.fxDelDate}/dates/${encodeURIComponent(delDateBtn.dataset.fxDate)}`, "DELETE");
+      showToast("Date removed");
+      loadFixed();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const addDateBtn = e.target.closest("[data-fx-add-date]");
+  if(addDateBtn){
+    const id = addDateBtn.dataset.fxAddDate;
+    const dateInput = document.getElementById(`fx-new-date-${id}`);
+    const seatsInput = document.getElementById(`fx-new-seats-${id}`);
+    const date = (dateInput?.value || "").trim();
+    const seats = Number(seatsInput?.value) || 0;
+    if(!date){ showToast("Enter a date first."); return; }
+    const bits = date.split(" ");
+    try{
+      await apiSendAdmin(`/api/fixed/${id}/dates`, "PUT", { date, d: bits[0]||"", m: bits[1]||"", seats });
+      showToast("Date added");
+      loadFixed();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+});
+
+function cancelFxEdit(){
+  fxEditId = null;
+  document.getElementById("fxSubmitBtn").textContent = "Add fixed departure";
+  document.getElementById("fxCancelBtn").style.display = "none";
+  ["fxName","fxLoc","fxDays","fxFromCity","fxBadge","fxPrice","fxShortDesc","fxDateOptions"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value=""; });
+}
+async function addFixed(){
+  const msg = document.getElementById("fxMsg");
+  msg.textContent = "";
+  const body = {
+    name: document.getElementById("fxName").value.trim(),
+    loc: document.getElementById("fxLoc").value.trim(),
+    days: document.getElementById("fxDays").value.trim() || "5D/4N",
+    fromCity: document.getElementById("fxFromCity").value.trim(),
+    badge: document.getElementById("fxBadge").value.trim(),
+    price: document.getElementById("fxPrice").value,
+    shortDesc: document.getElementById("fxShortDesc").value.trim(),
+    dateOptions: parseFixedDateOptions(document.getElementById("fxDateOptions").value),
+  };
+  if(!body.name || !body.loc){ msg.style.color="var(--coral-deep)"; msg.textContent = "Name and route are required."; return; }
+  try{
+    if(fxEditId){
+      await apiSendAdmin(`/api/fixed/${fxEditId}`, "PUT", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Fixed departure updated.";
+      showToast("Fixed departure updated");
+    } else {
+      await apiSendAdmin("/api/fixed", "POST", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Fixed departure added.";
+      showToast("Fixed departure added");
+    }
+    cancelFxEdit();
+    loadFixed();
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- CUSTOMIZE ---------- */
+const CZ_FIELDS = {
+  hotels: [{id:"destination",label:"Destination"},{id:"category",label:"Category (Budget/Standard/Deluxe/Luxury)"},{id:"name",label:"Hotel name"},{id:"price",label:"Price (₹)",type:"number"},{id:"description",label:"Description",span:2,type:"textarea"}],
+  sightseeing: [{id:"destination",label:"Destination"},{id:"name",label:"Name"},{id:"price",label:"Price (₹ per traveller)",type:"number"},{id:"description",label:"Description",span:2,type:"textarea"}],
+  transfers: [{id:"destination",label:"Destination"},{id:"name",label:"Name"},{id:"price",label:"Price (₹ per traveller)",type:"number"},{id:"description",label:"Description",span:2,type:"textarea"}],
+  visas: [{id:"country",label:"Country"},{id:"name",label:"Name"},{id:"price",label:"Price (₹ per traveller)",type:"number"},{id:"description",label:"Description",span:2,type:"textarea"}],
+};
+function buildCzForm(type){
+  const host = document.getElementById(`czForm-${type}`);
+  if(host.dataset.built) return;
+  host.dataset.built = "1";
+  host.innerHTML = `<div class="form-grid">${CZ_FIELDS[type].map(f=>`
+    <div class="field ${f.span===2?"span2":""}">
+      <label>${f.label}</label>
+      ${f.type==="textarea"?`<textarea id="cz-${type}-${f.id}"></textarea>`:`<input id="cz-${type}-${f.id}" type="${f.type||"text"}">`}
+    </div>`).join("")}</div>`;
+}
+document.querySelectorAll(".cz-tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".cz-tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll("#sec-customize .subsection").forEach(s=>s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("cz-sub-"+tab.dataset.cz).classList.add("active");
+  });
+});
+let czLastData = {};
+async function loadCustomize(){
+  Object.keys(CZ_FIELDS).forEach(buildCzForm);
+  try{
+    const data = await apiGetAdmin("/api/customize/admin/all");
+    czLastData = data;
+    ["hotels","sightseeing","transfers","visas"].forEach(type=>{
+      const el = document.getElementById(`czList-${type}`);
+      const items = data[type] || [];
+      if(!items.length){ el.innerHTML = '<div class="empty">No items yet.</div>'; return; }
+      const locLabel = type==="visas" ? "country" : "destination";
+      el.innerHTML = `<table><thead><tr><th>${locLabel==="country"?"Country":"Destination"}</th><th>Name</th><th>Price</th><th></th></tr></thead><tbody>
+        ${items.map(i=>`<tr><td>${esc(i[locLabel])}${i.category?` <span class="badge-src">${esc(i.category)}</span>`:""}</td><td>${esc(i.name)}</td><td>${money(i.price)}</td>
+        <td>
+          <button class="btn small ghost" data-cz-edit="${i.id}" data-cz-type="${type}">Edit</button>
+          <button class="btn small coral" data-cz-del="${i.id}" data-cz-type="${type}">Delete</button>
+        </td></tr>`).join("")}</tbody></table>`;
+    });
+    if(data.settings){
+      document.getElementById("czTaxPercent").value = data.settings.taxPercent;
+      document.getElementById("czMarginPercent").value = data.settings.marginPercentage ?? 0;
+    }
+  }catch(err){
+    ["hotels","sightseeing","transfers","visas"].forEach(type=>{
+      document.getElementById(`czList-${type}`).innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    });
+  }
+  const enqEl = document.getElementById("czEnquiries");
+  enqEl.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/customize/admin/enquiries");
+    const rows = data.enquiries || [];
+    if(!rows.length){ enqEl.innerHTML = '<div class="empty">No requests yet.</div>'; return; }
+    enqEl.innerHTML = `<table><thead><tr><th>Date</th><th>Destination</th><th>Traveller</th><th>Total</th><th>Contact</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr><td>${fmtDate(r.createdAt)}</td><td>${esc(r.destination)}</td><td>${esc(r.travellers)}</td><td>${money(r.total)}</td>
+      <td>${esc(r.name)}<br><span class="muted">${esc(r.phone)} · ${esc(r.email)}</span></td></tr>`).join("")}</tbody></table>`;
+  }catch(err){ enqEl.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-cz-del]");
+  if(!btn) return;
+  if(!confirm("Delete this item?")) return;
+  try{
+    await apiSendAdmin(`/api/customize/${btn.dataset.czType}/${btn.dataset.czDel}`, "DELETE");
+    showToast("Item deleted");
+    loadCustomize();
+  }catch(err){ showToast(err.message); }
+});
+let czEditId = { hotels: null, sightseeing: null, transfers: null, visas: null };
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-cz-edit]");
+  if(!btn) return;
+  const type = btn.dataset.czType;
+  const id = btn.dataset.czEdit;
+  const item = (czLastData[type] || []).find(i => i.id === id);
+  if(!item){ showToast("Item not found."); return; }
+  buildCzForm(type);
+  CZ_FIELDS[type].forEach(f=>{
+    const el = document.getElementById(`cz-${type}-${f.id}`);
+    if(el) el.value = item[f.id] ?? "";
+  });
+  czEditId[type] = id;
+  document.getElementById(`czSubmitBtn-${type}`).textContent = "Save changes";
+  document.getElementById(`czCancelBtn-${type}`).style.display = "inline-block";
+  document.getElementById(`czForm-${type}`).scrollIntoView({ behavior: "smooth", block: "center" });
+});
+function cancelCzEdit(type){
+  czEditId[type] = null;
+  document.getElementById(`czSubmitBtn-${type}`).textContent = "Add";
+  document.getElementById(`czCancelBtn-${type}`).style.display = "none";
+  CZ_FIELDS[type].forEach(f=>{ const el = document.getElementById(`cz-${type}-${f.id}`); if(el) el.value=""; });
+}
+async function addCzItem(type){
+  const msg = document.getElementById(`czMsg-${type}`);
+  msg.textContent = "";
+  const get = id => document.getElementById(`cz-${type}-${id}`).value;
+  const body = {};
+  CZ_FIELDS[type].forEach(f=>{ body[f.id] = get(f.id).trim ? get(f.id).trim() : get(f.id); });
+  const editingId = czEditId[type];
+  try{
+    if(editingId){
+      await apiSendAdmin(`/api/customize/${type}/${editingId}`, "PUT", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Updated.";
+      showToast("Item updated");
+    } else {
+      await apiSendAdmin(`/api/customize/${type}`, "POST", body);
+      msg.style.color = "var(--teal-deep)"; msg.textContent = "Added.";
+      showToast("Item added");
+    }
+    cancelCzEdit(type);
+    loadCustomize();
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+async function saveCzTax(){
+  const msg = document.getElementById("czTaxMsg");
+  msg.textContent = "";
+  const taxVal = document.getElementById("czTaxPercent").value;
+  const marginVal = document.getElementById("czMarginPercent").value;
+  try{
+    await apiSendAdmin(`/api/customize/settings`, "PUT", { taxPercent: Number(taxVal), marginPercentage: Number(marginVal) });
+    msg.style.color = "var(--teal-deep)"; msg.textContent = "Saved.";
+    showToast("Tax & margin updated");
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- BOOKINGS ---------- */
+async function loadBookings(){
+  const el = document.getElementById("bookingsList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/bookings/admin/all");
+    const rows = data.bookings || [];
+    window.bkRows = rows; // used by the Edit form
+    if(!rows.length){ el.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Date</th><th>Item / Trip</th><th>Traveller</th><th>Payment</th><th>Status</th><th>Voucher</th><th></th></tr></thead><tbody>
+      ${rows.map(b=>{
+        const pay = b.payment;
+        const payPill = pay ? `<br><span class="pill ${pay.status==='PAID'?'green':pay.status==='PARTIAL'?'amber':'red'}">${esc(pay.status)}</span> <span class="muted">Adv ${money(pay.advance||0)} · Paid ${money(pay.paid)} · Bal ${money(pay.balance)}</span>${pay.balance>0?`<br><span class="muted">Balance due: ${b.balanceDueDate?esc(b.balanceDueDate):'not set'}</span>`:''}` : '';
+        const isCustom = b.voucherType === "CUSTOM";
+        return `<tr>
+        <td>${fmtDate(b.createdAt)}</td>
+        <td>${esc(b.itemName)}${b.isFixed?' <span class="badge-src">fixed</span>':''}${b.bookingSource==='OFFLINE'?' <span class="badge-src">offline</span>':''}${b.destination?`<br><span class="muted">Destination: ${esc(b.destination)}</span>`:''}${b.travelDate?`<br><span class="muted">Travel: ${esc(b.travelDate)}</span>`:''}<br><span class="muted">${b.travellers||1} pax${b.tripDuration?` · ${esc(b.tripDuration)}`:''}</span>${b.remarks?`<br><span class="muted">Note: ${esc(b.remarks)}</span>`:''}</td>
+        <td>${esc(b.user.name)}<br><span class="muted">${esc(b.user.phone)} · ${esc(b.user.email)}</span></td>
+        <td>${money(b.amount)} <span class="muted">(x${b.travellers})</span>${payPill}</td>
+        <td><span class="pill ${b.status==='confirmed'?'green':'amber'}">${esc(b.status)}</span>${b.referralReward?`<br><span class="muted">Referral: ${money(b.referralReward.rewardAmount)}</span>`:''}</td>
+        <td><span class="badge-src">${isCustom?'Custom PDF':'Auto'}</span><br>
+          <button class="btn small ghost" data-bk-upload="${b.id}">Upload PDF</button>
+          <button class="btn small ghost" data-bk-preview="${b.id}">Preview</button>
+          ${isCustom?`<button class="btn small ghost" data-bk-revert="${b.id}">Use auto</button>`:''}</td>
+        <td><button class="btn small ghost" data-bk-edit="${b.id}">Edit</button> ${b.status!=='confirmed'?`<button class="btn small" data-confirm-bk="${b.id}">Confirm</button> `:''}${(!pay||pay.balance>0)?`<button class="btn small ghost" data-bk-pay="${b.id}">+ Payment</button>`:''}</td>
+      </tr>`;}).join("")}</tbody></table>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+
+/* ---- Add Offline Booking ---- */
+let obPackagesLoaded = false;
+function toggleOfflineBookingForm(){
+  const card = document.getElementById("offlineBookingCard");
+  const open = card.style.display === "none";
+  card.style.display = open ? "block" : "none";
+  if(open){
+    if(!document.getElementById("obDate").value) document.getElementById("obDate").value = new Date().toISOString().slice(0,10);
+    if(!obPackagesLoaded) loadOfflinePackageOptions();
+  }
+}
+let obPackageIndex = {};
+async function loadOfflinePackageOptions(){
+  const sel = document.getElementById("obPackage");
+  try{
+    const [india, intl, fixed] = await Promise.allSettled([
+      apiGetPublic("/api/packages/india"), apiGetPublic("/api/packages/international"), apiGetPublic("/api/fixed"),
+    ]);
+    const groups = [
+      ["India Packages", india.status==="fulfilled" ? india.value.packages : [], "in"],
+      ["International Packages", intl.status==="fulfilled" ? intl.value.packages : [], "it"],
+      ["Fixed Departures", fixed.status==="fulfilled" ? fixed.value.departures : [], "fd"],
+    ];
+    obPackageIndex = {};
+    let html = '<option value="">Select package…</option>';
+    for(const [label, list, key] of groups){
+      if(!list || !list.length) continue;
+      html += `<optgroup label="${esc(label)}">` + list.map(p=>{
+        const k = `${key}::${p.id}`;
+        obPackageIndex[k] = { id: p.id, name: p.name, loc: p.loc || "", price: Number(p.discountPrice || p.price) || 0 };
+        return `<option value="${esc(k)}">${esc(p.name)}</option>`;
+      }).join("") + `</optgroup>`;
+    }
+    html += '<option value="custom::other">Other / custom package…</option>';
+    sel.innerHTML = html;
+    obPackagesLoaded = true;
+  }catch(err){ sel.innerHTML = '<option value="">Could not load packages</option><option value="custom::other">Other / custom package…</option>'; }
+}
+document.addEventListener("change", (e)=>{
+  if(e.target.id !== "obPackage") return;
+  const p = obPackageIndex[e.target.value];
+  if(p && !document.getElementById("obTotal").value){ document.getElementById("obTotal").value = p.price; obCalcBalance(); }
+});
+function obCalcBalance(){
+  const t = Number(document.getElementById("obTotal").value) || 0;
+  const pd = Number(document.getElementById("obPaid").value) || 0;
+  document.getElementById("obBalance").value = Math.max(0, t - pd);
+}
+async function saveOfflineBooking(){
+  const msg = document.getElementById("obMsg"), btn = document.getElementById("obSaveBtn");
+  msg.style.color = "var(--coral-deep)"; msg.textContent = "";
+  const sel = document.getElementById("obPackage").value;
+  let pkg = obPackageIndex[sel];
+  if(sel === "custom::other"){
+    const nm = prompt("Enter the package / trip name:");
+    if(!nm || !nm.trim()){ msg.textContent = "Please enter a package name."; return; }
+    pkg = { id: "custom", name: nm.trim(), loc: "" };
+  }
+  if(!pkg){ msg.textContent = "Please select a package."; return; }
+  const body = {
+    name: document.getElementById("obName").value.trim(),
+    phone: document.getElementById("obPhone").value.trim(),
+    email: document.getElementById("obEmail").value.trim(),
+    itemId: pkg.id, itemName: pkg.name, destination: document.getElementById("obDestination").value.trim() || pkg.loc,
+    travellers: Number(document.getElementById("obPax").value) || 1,
+    tripDuration: document.getElementById("obDuration").value.trim(),
+    balanceDueDate: document.getElementById("obDueDate").value,
+    totalAmount: Number(document.getElementById("obTotal").value),
+    paidAmount: Number(document.getElementById("obPaid").value) || 0,
+    bookingDate: document.getElementById("obDate").value,
+    travelDate: document.getElementById("obTravelDate").value,
+    remarks: document.getElementById("obRemarks").value.trim(),
+  };
+  btn.disabled = true;
+  try{
+    const r = await apiSendAdmin("/api/bookings/admin/offline", "POST", body);
+    msg.style.color = "var(--teal-deep)";
+    msg.textContent = `Booking created${r.accountCreated ? " · new customer account created" : ""}${r.emailSent ? " · confirmation email sent" : " · (email not sent — mail not configured)"}.`;
+    showToast("Offline booking added");
+    ["obName","obPhone","obEmail","obTotal","obRemarks","obTravelDate","obDestination","obDuration","obDueDate"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("obPax").value = 1;
+    document.getElementById("obPaid").value = 0; document.getElementById("obPackage").value = ""; obCalcBalance();
+    loadBookings();
+  }catch(err){ msg.textContent = err.message; }
+  finally{ btn.disabled = false; }
+}
+
+/* ---- Edit booking (trip + payment details) ---- */
+let beEditingId = null;
+function beCalcBalance(){
+  const t = Number(document.getElementById("beTotal").value) || 0;
+  const pd = Number(document.getElementById("bePaid").value) || 0;
+  document.getElementById("beBalance").value = Math.max(0, t - pd);
+}
+function openBookingEdit(id){
+  const b = (window.bkRows || []).find(x=>x.id === id);
+  if(!b) return;
+  beEditingId = id;
+  const pay = b.payment;
+  document.getElementById("beTitle").textContent = `— ${b.itemName} (${b.user.name})`;
+  document.getElementById("beDestination").value = b.destination || "";
+  document.getElementById("beTravelDate").value = b.travelDate ? String(b.travelDate).slice(0,10) : "";
+  document.getElementById("bePax").value = b.travellers || 1;
+  document.getElementById("beDuration").value = b.tripDuration || "";
+  document.getElementById("beTotal").value = pay ? pay.total : (b.amount || 0);
+  document.getElementById("beAdvance").value = pay ? (pay.advance || 0) : 0;
+  document.getElementById("bePaid").value = pay ? pay.paid : 0;
+  document.getElementById("beDueDate").value = b.balanceDueDate || "";
+  document.getElementById("beMsg").textContent = "";
+  beCalcBalance();
+  const card = document.getElementById("bookingEditCard");
+  card.style.display = "block";
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function closeBookingEdit(){ document.getElementById("bookingEditCard").style.display = "none"; beEditingId = null; }
+async function saveBookingEdit(){
+  if(!beEditingId) return;
+  const msg = document.getElementById("beMsg"), btn = document.getElementById("beSaveBtn");
+  msg.style.color = "var(--coral-deep)"; msg.textContent = "";
+  const body = {
+    destination: document.getElementById("beDestination").value.trim(),
+    travelDate: document.getElementById("beTravelDate").value,
+    travellers: Number(document.getElementById("bePax").value),
+    tripDuration: document.getElementById("beDuration").value.trim(),
+    totalAmount: Number(document.getElementById("beTotal").value),
+    advanceAmount: Number(document.getElementById("beAdvance").value) || 0,
+    paidAmount: Number(document.getElementById("bePaid").value) || 0,
+    balanceDueDate: document.getElementById("beDueDate").value,
+  };
+  btn.disabled = true;
+  try{
+    await apiSendAdmin(`/api/bookings/admin/edit/${encodeURIComponent(beEditingId)}`, "PUT", body);
+    showToast("Booking updated");
+    closeBookingEdit();
+    loadBookings();
+  }catch(err){ msg.textContent = err.message; }
+  finally{ btn.disabled = false; }
+}
+
+/* ---- Voucher upload / preview / payments ---- */
+let bkUploadTarget = null;
+document.addEventListener("click", async (e)=>{
+  const up = e.target.closest("[data-bk-upload]");
+  if(up){ bkUploadTarget = up.dataset.bkUpload; const f = document.getElementById("bkVoucherFile"); f.value = ""; f.click(); return; }
+
+  const prev = e.target.closest("[data-bk-preview]");
+  if(prev){
+    try{
+      const res = await fetch(`${API_BASE_URL}/api/bookings/admin/voucher/${prev.dataset.bkPreview}`, { headers: { "x-admin-key": session.adminKey || "" } });
+      if(!res.ok) throw new Error((await res.json().catch(()=>({}))).error || "Could not load voucher.");
+      window.open(URL.createObjectURL(await res.blob()), "_blank");
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const ed = e.target.closest("[data-bk-edit]");
+  if(ed){ openBookingEdit(ed.dataset.bkEdit); return; }
+
+  const rev = e.target.closest("[data-bk-revert]");
+  if(rev){
+    if(!confirm("Remove the uploaded PDF and go back to the auto-generated voucher?")) return;
+    try{ await apiSendAdmin(`/api/bookings/admin/voucher-upload/${rev.dataset.bkRevert}`, "DELETE", {}); showToast("Using auto voucher"); loadBookings(); }
+    catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const pay = e.target.closest("[data-bk-pay]");
+  if(pay){
+    const amt = prompt("Payment received (₹):");
+    if(!amt) return;
+    const note = prompt("Note (optional):") || "";
+    try{ await apiSendAdmin("/api/bookings/admin/payment", "POST", { bookingId: pay.dataset.bkPay, amount: Number(amt), note }); showToast("Payment recorded"); loadBookings(); }
+    catch(err){ showToast(err.message); }
+  }
+});
+document.getElementById("bkVoucherFile").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file || !bkUploadTarget) return;
+  if(!/\.pdf$/i.test(file.name) || file.type !== "application/pdf"){ showToast("Only PDF files are allowed."); return; }
+  if(file.size > 5*1024*1024){ showToast("PDF is too large (max 5 MB)."); return; }
+  const fd = new FormData(); fd.append("voucher", file);
+  try{
+    const res = await fetch(`${API_BASE_URL}/api/bookings/admin/voucher-upload/${bkUploadTarget}`, { method: "POST", headers: { "x-admin-key": session.adminKey || "" }, body: fd });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || "Upload failed.");
+    showToast("Voucher PDF uploaded — customer will get this file");
+    loadBookings();
+  }catch(err){ showToast(err.message); }
+});
+document.addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-confirm-bk]");
+  if(!btn) return;
+  if(!confirm("Mark this booking as confirmed? This may trigger a referral payout email.")) return;
+  try{
+    await apiSendAdmin("/api/bookings/admin/confirm", "POST", { bookingId: btn.dataset.confirmBk });
+    showToast("Booking confirmed");
+    loadBookings();
+  }catch(err){ showToast(err.message); }
+});
+
+/* ---------- REFER & EARN ----------
+   Admin has full control here: nobody's referral link works and nobody
+   earns anything until you Approve them below with a commission %. You
+   can change that % any time, or Revoke access entirely. "View bookings"
+   expands each partner's own earnings — booking ID, destination, the
+   booking's business amount, and the commission credited to them. */
+function referRowId(email){ return `ref-earnings-${email.replace(/[^a-zA-Z0-9]/g,"_")}`; }
+function referAppRowId(email){ return `ref-application-${email.replace(/[^a-zA-Z0-9]/g,"_")}`; }
+
+async function loadRefer(){
+  const el = document.getElementById("referList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/refer/admin/all");
+    const rows = data.referrers || [];
+    if(!rows.length){ el.innerHTML = '<div class="empty">No referral partner requests yet.</div>'; return; }
+
+    el.innerHTML = `<p class="muted">Approve who gets to be a referral partner and choose their commission % — each partner only sees their own referral link and earnings on their dashboard once approved.</p>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Status</th><th>Commission %</th><th>Referred</th><th>Earned</th><th>Actions</th></tr></thead><tbody>
+      ${rows.map(r=>{
+        const statusPill = r.status==="approved" ? '<span class="pill green">Approved</span>'
+          : r.status==="revoked" ? '<span class="pill red">Revoked</span>'
+          : '<span class="pill amber">Pending</span>';
+        const earnings = r.earnings || [];
+        const actions = r.status==="approved"
+          ? `<button class="btn small" data-save-commission-ref="${esc(r.email)}">Save %</button> <button class="btn small coral" data-revoke-ref="${esc(r.email)}">Revoke</button>`
+          : `<button class="btn small" data-approve-ref="${esc(r.email)}">Approve</button>`;
+        const viewBtn = earnings.length ? `<button class="btn small ghost" data-view-earnings-ref="${esc(r.email)}">View bookings (${earnings.length})</button>` : "";
+        const appBtn = `<button class="btn small ghost" data-view-application-ref="${esc(r.email)}">View application</button>`;
+        const earningsTable = earnings.length
+          ? `<table><thead><tr><th>Booking ID</th><th>Destination</th><th>Business Amount</th><th>Commission %</th><th>Commission Earned</th><th>Date</th></tr></thead><tbody>
+              ${earnings.map(e=>`<tr><td>${esc(e.bookingId)}</td><td>${esc(e.destination||e.itemName||"-")}</td><td>${money(e.amount)}</td><td>${e.commissionPercent}%</td><td>${money(e.rewardAmount)}</td><td>${new Date(e.creditedAt).toLocaleDateString("en-IN")}</td></tr>`).join("")}
+            </tbody></table>`
+          : '<span class="muted">No confirmed bookings yet.</span>';
+        const applicationBlock = `<div class="app-detail-grid">
+              <div><span class="muted">Phone</span><br>${esc(r.phone||"-")}</div>
+              <div><span class="muted">Instagram/YouTube profile</span><br>${esc(r.socialProfile||"-")}</div>
+              <div><span class="muted">Followers</span><br>${esc(r.followers||"-")}</div>
+              <div><span class="muted">Content category</span><br>${esc(r.contentCategory||"-")}</div>
+              <div><span class="muted">Audience location</span><br>${esc(r.audienceLocation||"-")}</div>
+              <div><span class="muted">Applied on</span><br>${r.requestedAt ? new Date(r.requestedAt).toLocaleDateString("en-IN") : "-"}</div>
+            </div>
+            <div style="margin-top:10px;"><span class="muted">Why do you want to promote us?</span><p style="margin:4px 0 0;">${esc(r.reason||"-")}</p></div>`;
+        return `<tr>
+          <td>${esc(r.name||"-")}</td>
+          <td>${esc(r.email)}</td>
+          <td>${esc(r.code)}</td>
+          <td>${statusPill}</td>
+          <td><input type="number" min="0" max="100" step="0.5" data-commission-for="${esc(r.email)}" value="${r.commissionPercent==null?"":r.commissionPercent}" placeholder="%" style="width:64px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;"></td>
+          <td>${r.referredCount}</td>
+          <td>${money(r.rewardEarned)}</td>
+          <td style="white-space:nowrap;">${actions} ${appBtn} ${viewBtn}</td>
+        </tr>
+        <tr id="${referAppRowId(r.email)}" style="display:none;"><td colspan="8">${applicationBlock}</td></tr>
+        <tr id="${referRowId(r.email)}" style="display:none;"><td colspan="8">${earningsTable}</td></tr>`;
+      }).join("")}
+      </tbody></table>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+
+document.addEventListener("click", async (e)=>{
+  const viewBtn = e.target.closest("[data-view-earnings-ref]");
+  if(viewBtn){
+    const row = document.getElementById(referRowId(viewBtn.dataset.viewEarningsRef));
+    if(row) row.style.display = row.style.display==="none" ? "table-row" : "none";
+    return;
+  }
+
+  const viewAppBtn = e.target.closest("[data-view-application-ref]");
+  if(viewAppBtn){
+    const row = document.getElementById(referAppRowId(viewAppBtn.dataset.viewApplicationRef));
+    if(row) row.style.display = row.style.display==="none" ? "table-row" : "none";
+    return;
+  }
+
+  const approveBtn = e.target.closest("[data-approve-ref]");
+  const saveBtn = e.target.closest("[data-save-commission-ref]");
+  if(approveBtn || saveBtn){
+    const email = approveBtn ? approveBtn.dataset.approveRef : saveBtn.dataset.saveCommissionRef;
+    const input = document.querySelector(`[data-commission-for="${CSS.escape(email)}"]`);
+    const pct = input ? Number(input.value) : NaN;
+    if(!input || input.value===""  || isNaN(pct) || pct<0 || pct>100){
+      showToast("Please enter a valid commission % (0–100) first.");
+      return;
+    }
+    try{
+      await apiSendAdmin("/api/refer/admin/approve", "POST", { email, commissionPercent: pct, approved: true });
+      showToast(approveBtn ? "Referral partner approved." : "Commission % updated.");
+      loadRefer();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+
+  const revokeBtn = e.target.closest("[data-revoke-ref]");
+  if(revokeBtn){
+    const email = revokeBtn.dataset.revokeRef;
+    if(!confirm(`Revoke referral partner access for ${email}? Their link will stop working for new sign-ups.`)) return;
+    try{
+      await apiSendAdmin("/api/refer/admin/approve", "POST", { email, approved: false });
+      showToast("Referral partner access revoked.");
+      loadRefer();
+    }catch(err){ showToast(err.message); }
+  }
+});
+
+/* ---------- WEDDING ---------- */
+document.querySelectorAll(".wd-tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".wd-tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll("#sec-wedding .subsection").forEach(s=>s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("wd-sub-"+tab.dataset.wd).classList.add("active");
+  });
+});
+async function loadWedding(){
+  const el = document.getElementById("wdList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetPublic("/api/wedding/venues");
+    const rows = data.venues || [];
+    el.innerHTML = rows.length ? `<table><thead><tr><th>Image</th><th>Destination</th><th>Name</th><th>Tag</th><th>Hotel Cat.</th><th>Rooms</th><th>Lawn Area</th><th>Pool</th><th>Rating</th><th>Approx. Cost</th><th></th></tr></thead><tbody>
+      ${rows.map(v=>`<tr><td>
+        ${v.imageUrl ? `<img src="${esc(v.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;display:block;margin-bottom:6px;">` : ''}
+        <div style="display:flex;gap:6px;">
+          <input type="text" class="wd-img-input" data-img-venue="${v.id}" value="${esc(v.imageUrl||'')}" placeholder="Image URL" style="width:120px;font-size:12px;">
+          <button class="btn small ghost" data-save-img="${v.id}">Save</button>
+        </div>
+      </td><td>${esc(v.destination)}</td><td>${esc(v.name)}</td><td>${esc(v.tag)}</td><td>${esc(v.hotelCategory||'-')}</td>
+      <td>${esc(v.rooms||'-')}</td><td>${esc(v.lawnArea||'-')}</td><td>${v.poolAvailable ? "Yes" : "No"}</td><td>${esc(v.rating||'-')} (${esc(v.reviewCount||0)})</td><td>${esc(v.startingPriceLabel)}</td>
+      <td><button class="btn small coral" data-del-venue="${v.id}">Delete</button></td></tr>`).join("")}</tbody></table>` : '<div class="empty">No venues yet.</div>';
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+
+  const enqEl = document.getElementById("wdEnquiries");
+  enqEl.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/wedding/admin/enquiries");
+    const rows = data.enquiries || [];
+    enqEl.innerHTML = rows.length ? `<table><thead><tr><th>Date</th><th>Couple</th><th>Venue</th><th>Preferred Hotel</th><th>Function(s)</th><th>Month</th><th>Contact</th></tr></thead><tbody>
+      ${rows.map(e=>`<tr><td>${fmtDate(e.createdAt)}</td><td>${esc(e.coupleNames)}</td><td>${esc(e.venueName||'-')}</td><td>${esc(e.hotelName||'-')}</td>
+      <td>${esc((e.functionTypes||[]).join(", ")||'-')}</td><td>${esc(e.weddingMonth)}</td>
+      <td>${esc(e.name)}<br><span class="muted">${esc(e.phone)} · ${esc(e.email)}</span></td></tr>`).join("")}</tbody></table>` : '<div class="empty">No enquiries yet.</div>';
+  }catch(err){ enqEl.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+document.addEventListener("click", async (e)=>{
+  const saveImgBtn = e.target.closest("[data-save-img]");
+  if(saveImgBtn){
+    const id = saveImgBtn.dataset.saveImg;
+    const input = document.querySelector(`[data-img-venue="${id}"]`);
+    const imageUrl = input ? input.value.trim() : "";
+    try{
+      await apiSendAdmin(`/api/wedding/venues/${id}`, "PUT", { imageUrl });
+      showToast("Venue image updated");
+      loadWedding();
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+  const btn = e.target.closest("[data-del-venue]");
+  if(!btn) return;
+  if(!confirm("Delete this venue?")) return;
+  try{
+    await apiSendAdmin(`/api/wedding/venues/${btn.dataset.delVenue}`, "DELETE");
+    showToast("Venue deleted");
+    loadWedding();
+  }catch(err){ showToast(err.message); }
+});
+async function addVenue(){
+  const msg = document.getElementById("wdMsg");
+  msg.textContent = "";
+  const body = {
+    name: document.getElementById("wdName").value.trim(),
+    destination: document.getElementById("wdDestination").value.trim(),
+    tag: document.getElementById("wdTag").value.trim(),
+    guestRange: document.getElementById("wdGuestRange").value.trim(),
+    startingPrice: document.getElementById("wdPrice").value,
+    hotelCategory: document.getElementById("wdHotelCategory").value.trim(),
+    rooms: document.getElementById("wdRooms").value,
+    lawnArea: document.getElementById("wdLawnArea").value.trim(),
+    poolAvailable: document.getElementById("wdPool").value,
+    rating: document.getElementById("wdRating").value,
+    reviewCount: document.getElementById("wdReviewCount").value,
+    imageUrl: document.getElementById("wdImageUrl").value.trim(),
+    desc: document.getElementById("wdDesc").value.trim(),
+  };
+  if(!body.name || !body.destination){ msg.style.color="var(--coral-deep)"; msg.textContent = "Name and destination are required."; return; }
+  try{
+    await apiSendAdmin("/api/wedding/venues", "POST", body);
+    msg.style.color = "var(--teal-deep)"; msg.textContent = "Venue added.";
+    ["wdName","wdDestination","wdTag","wdGuestRange","wdPrice","wdHotelCategory","wdRooms","wdLawnArea","wdRating","wdReviewCount","wdImageUrl","wdDesc"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("wdPool").value = "false";
+    loadWedding();
+    showToast("Venue added");
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- LEADS ---------- */
+// Lead Type + influencer source (added): Lead Type badge, Referred By, Referral
+// Code columns, a per-lead "Details" row, and Lead Type / Influencer filters.
+// The backend sends leadType / referredByInfluencer / influencerName on every lead.
+let leadsCache = [];
+const leadsFilter = { type: "ALL", influencer: "" };
+const LEAD_TYPE_LABEL = { INFLUENCER: "Influencer", CUSTOMER: "Customer", REFERRAL: "Referral" };
+const LEAD_TYPE_STYLE = {
+  INFLUENCER: "background:#efe4ff;color:#5b2aa8;",
+  CUSTOMER:   "background:#e3f1ff;color:#1a5fa8;",
+  REFERRAL:   "background:#e0f6e9;color:#17703f;",
+};
+function leadTypeBadge(t){
+  const type = LEAD_TYPE_LABEL[t] ? t : "CUSTOMER";
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;${LEAD_TYPE_STYLE[type]}">${LEAD_TYPE_LABEL[type]}</span>`;
+}
+function leadDetailHTML(l){
+  const type = LEAD_TYPE_LABEL[l.leadType] ? l.leadType : "CUSTOMER";
+  const who = l.influencerName || l.referrerName || l.referredByInfluencer || l.referrerEmail || "-";
+  let headline, category;
+  if(type === "REFERRAL"){
+    headline = `This lead is from Influencer: <strong>${esc(who)}</strong>${l.referralCode ? ` (Code: <strong>${esc(l.referralCode)}</strong>)` : ""}`;
+    category = "Customer Lead via Referral";
+  }else if(type === "INFLUENCER"){
+    headline = "This lead is from an Influencer / referral partner directly.";
+    category = "Influencer Lead";
+  }else{
+    headline = "This lead did not come through any influencer's referral.";
+    category = "Direct Customer Lead";
+  }
+  const utm = l.utm || {};
+  const utmTxt = [utm.source, utm.medium, utm.campaign].filter(Boolean).join(" / ");
+  return `<div style="padding:12px 14px;background:var(--surface,#fafafa);border:1px solid var(--line);border-radius:8px;white-space:normal;">
+    <div style="font-size:14px;margin-bottom:4px;">${headline}</div>
+    <div style="font-size:14px;margin-bottom:8px;">Lead Category: <strong>${esc(category)}</strong> ${leadTypeBadge(type)}</div>
+    <div class="muted" style="line-height:1.7;">
+      ${l.referredByInfluencer ? `Influencer ID: ${esc(l.referredByInfluencer)}<br>` : ""}
+      Lead source: ${esc((l.source||"").replace(/_/g," "))} &middot; Booking source: ${esc(l.bookingSource||"ONLINE")} &middot; Page: ${esc(l.page||"-")}<br>
+      Interest: ${esc(l.interest||"-")}${l.message ? ` &middot; Message: ${esc(l.message)}` : ""}<br>
+      ${l.referralCode ? `Initial package: ${esc(l.initialPackage||"-")} &middot; Final package: ${esc(l.finalPackage||"-")}<br>` : ""}
+      ${utmTxt ? `Campaign: ${esc(utmTxt)}<br>` : ""}
+      Created: ${fmtDate(l.createdAt)}
+    </div>
+  </div>`;
+}
+function renderLeadsTable(){
+  const listEl = document.getElementById("leadsList");
+  const inf = leadsFilter.influencer.toLowerCase();
+  const rows = leadsCache.filter(l=>{
+    if(leadsFilter.type !== "ALL" && l.leadType !== leadsFilter.type) return false;
+    if(inf){
+      const name = String(l.influencerName || l.referrerName || l.referredByInfluencer || l.referrerEmail || "").toLowerCase();
+      if(name !== inf) return false;
+    }
+    return true;
+  });
+  if(!rows.length){ listEl.innerHTML = '<div class="empty">No leads found for this filter.</div>'; return; }
+  listEl.innerHTML = `<table><thead><tr><th>Lead Name</th><th>Phone</th><th>Email</th><th>Lead Type</th><th>Referred By</th><th>Referral Code</th><th>Date</th><th>Interest</th><th>Source</th><th>Package Downloaded</th><th>Referral</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(l=>`<tr>
+      <td>${esc(l.name)}</td>
+      <td>${esc(l.phone||'-')}</td>
+      <td>${esc(l.email||'-')}</td>
+      <td>${leadTypeBadge(l.leadType)}</td>
+      <td>${l.leadType === "REFERRAL" ? esc(l.influencerName || l.referrerName || l.referredByInfluencer || '-') : '<span class="muted">—</span>'}</td>
+      <td>${l.referralCode ? `<strong>${esc(l.referralCode)}</strong>` : '<span class="muted">—</span>'}</td>
+      <td>${fmtDate(l.createdAt)}</td>
+      <td>${esc(l.interest||'-')}${l.message?`<br><span class="muted">${esc(l.message)}</span>`:''}</td>
+      <td><span class="badge-src">${esc(l.source.replace(/_/g,' '))}</span></td>
+      <td>${l.source === "PACKAGE_DOWNLOAD" ? esc(l.packageName || l.finalPackage || l.interest || "-") : '<span class="muted">—</span>'}</td>
+      <td>${l.referralCode ? `
+        <div class="muted">Initial: ${esc(l.initialPackage || '-')}</div>
+        <div class="muted">Final: ${esc(l.finalPackage || '-')}</div>
+        <label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-weight:normal;">
+          <input type="checkbox" data-lead-verify="${l.id}" ${l.referralVerified ? 'checked' : ''}> Verified
+        </label>
+      ` : '<span class="muted">—</span>'}</td>
+      <td><select data-lead-status="${l.id}">
+        ${["new","contacted","converted","closed"].map(s=>`<option value="${s}" ${s===l.status?"selected":""}>${s}</option>`).join("")}
+      </select></td>
+      <td><button class="btn small ghost" data-lead-detail="${l.id}">Details</button></td>
+    </tr>
+    <tr id="lead-detail-${l.id}" style="display:none;"><td colspan="12">${leadDetailHTML(l)}</td></tr>`).join("")}</tbody></table>`;
+}
+function renderLeadsFilterBar(){
+  let bar = document.getElementById("leadsFilterBar");
+  const listEl = document.getElementById("leadsList");
+  if(!bar){
+    bar = document.createElement("div");
+    bar.id = "leadsFilterBar";
+    bar.style.cssText = "display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px;";
+    listEl.parentNode.insertBefore(bar, listEl);
+  }
+  const names = [...new Set(leadsCache
+    .map(l => l.influencerName || l.referrerName || l.referredByInfluencer || l.referrerEmail || "")
+    .filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  bar.innerHTML = `
+    <label style="display:flex;align-items:center;gap:6px;font-weight:normal;">Lead Type
+      <select id="leadsTypeFilter">
+        ${[["ALL","All"],["INFLUENCER","Influencer"],["CUSTOMER","Customer"],["REFERRAL","Referral"]].map(([v,t])=>`<option value="${v}" ${v===leadsFilter.type?"selected":""}>${t}</option>`).join("")}
+      </select>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-weight:normal;">Influencer
+      <select id="leadsInfluencerFilter">
+        <option value="">All influencers</option>
+        ${names.map(n=>`<option value="${esc(n)}" ${n.toLowerCase()===leadsFilter.influencer.toLowerCase()?"selected":""}>${esc(n)}</option>`).join("")}
+      </select>
+    </label>`;
+}
+async function loadLeads(){
+  const statsEl = document.getElementById("leadsStats");
+  const listEl = document.getElementById("leadsList");
+  statsEl.innerHTML = ""; listEl.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/leads/admin/all");
+    const bySource = data.bySource || {}, byStatus = data.byStatus || {};
+    statsEl.innerHTML = `<div class="stat-card"><div class="num">${data.total}</div><div class="lbl">Total leads</div></div>` +
+      Object.entries(bySource).map(([k,v])=>`<div class="stat-card"><div class="num">${v}</div><div class="lbl">${esc(k.replace(/_/g," "))}</div></div>`).join("");
+    leadsCache = data.leads || [];
+    if(!leadsCache.length){ listEl.innerHTML = '<div class="empty">No leads yet.</div>'; return; }
+    renderLeadsFilterBar();
+    renderLeadsTable();
+  }catch(err){ listEl.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest("[data-lead-detail]");
+  if(!btn) return;
+  const row = document.getElementById("lead-detail-" + btn.dataset.leadDetail);
+  if(row){
+    const open = row.style.display === "none";
+    row.style.display = open ? "table-row" : "none";
+    btn.textContent = open ? "Hide" : "Details";
+  }
+});
+document.addEventListener("change", (e)=>{
+  if(e.target.id === "leadsTypeFilter"){ leadsFilter.type = e.target.value; renderLeadsTable(); }
+  if(e.target.id === "leadsInfluencerFilter"){ leadsFilter.influencer = e.target.value; renderLeadsTable(); }
+});
+document.addEventListener("change", async (e)=>{
+  const sel = e.target.closest("[data-lead-status]");
+  if(sel){
+    try{
+      await apiSendAdmin("/api/leads/admin/status", "POST", { leadId: sel.dataset.leadStatus, status: sel.value });
+      showToast("Lead status updated");
+    }catch(err){ showToast(err.message); }
+    return;
+  }
+  const chk = e.target.closest("[data-lead-verify]");
+  if(chk){
+    const wasChecked = chk.checked;
+    try{
+      await apiSendAdmin("/api/leads/admin/verify-referral", "POST", { leadId: chk.dataset.leadVerify, verified: wasChecked });
+      showToast(wasChecked ? "Referral marked as verified" : "Referral verification removed");
+    }catch(err){
+      chk.checked = !wasChecked;
+      showToast(err.message);
+    }
+  }
+});
+
+/* ---------- SETTINGS ---------- */
+async function loadSettings(){
+  const msg = document.getElementById("stgMsg");
+  msg.textContent = "";
+  try{
+    const data = await apiGetPublic("/api/settings");
+    const s = data.settings || {};
+    document.getElementById("stgEmail").value = s.contactEmail || "";
+    document.getElementById("stgWhatsapp").value = s.whatsappNumber || "";
+    document.getElementById("stgPhone").value = s.contactPhone || "";
+    document.getElementById("stgPhoneAlt").value = s.contactPhoneAlt || "";
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+  loadAiSettings();
+}
+async function saveSettings(){
+  const msg = document.getElementById("stgMsg");
+  msg.textContent = "";
+  const body = {
+    contactEmail: document.getElementById("stgEmail").value.trim(),
+    whatsappNumber: document.getElementById("stgWhatsapp").value.trim(),
+    contactPhone: document.getElementById("stgPhone").value.trim(),
+    contactPhoneAlt: document.getElementById("stgPhoneAlt").value.trim(),
+  };
+  try{
+    await apiSendAdmin("/api/settings", "PUT", body);
+    msg.style.color = "var(--teal-deep)"; msg.textContent = "Settings saved.";
+    showToast("Settings saved");
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- AI CONTENT PROVIDER ---------- */
+async function loadAiSettings(){
+  const msg = document.getElementById("aiMsg");
+  msg.textContent = "";
+  try{
+    const data = await apiGetAdmin("/api/ai-settings");
+    const s = data.settings || {};
+    document.getElementById("aiTextProvider").value = s.textProvider || "gemini";
+    document.getElementById("aiGeminiKey").value = s.geminiApiKey || "";
+    document.getElementById("aiOpenaiKey").value = s.openaiApiKey || "";
+    document.getElementById("aiImageProvider").value = s.imageProvider || "pexels";
+    document.getElementById("aiPexelsKey").value = s.pexelsApiKey || "";
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+async function saveAiSettings(){
+  const msg = document.getElementById("aiMsg");
+  msg.textContent = "";
+  const body = {
+    textProvider: document.getElementById("aiTextProvider").value,
+    geminiApiKey: document.getElementById("aiGeminiKey").value.trim(),
+    openaiApiKey: document.getElementById("aiOpenaiKey").value.trim(),
+    imageProvider: document.getElementById("aiImageProvider").value,
+    pexelsApiKey: document.getElementById("aiPexelsKey").value.trim(),
+  };
+  try{
+    await apiSendAdmin("/api/ai-settings", "PUT", body);
+    msg.style.color = "var(--teal-deep)"; msg.textContent = "AI provider saved.";
+    showToast("AI provider saved");
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+}
+
+/* ---------- FESTIVAL OFFERS ---------- */
+document.getElementById("ofImage").addEventListener("change", (e)=>{
+  const f = e.target.files && e.target.files[0];
+  const prev = document.getElementById("ofPreview");
+  if(!f){ prev.style.display = "none"; return; }
+  prev.src = URL.createObjectURL(f);
+  prev.style.display = "block";
+});
+
+async function loadOffers(){
+  const el = document.getElementById("ofList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/offers/admin/all");
+    const offers = data.offers || [];
+    if(!offers.length){ el.innerHTML = '<div class="empty">No offers yet. Upload your first one above.</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Image</th><th>Title</th><th>Status</th><th>Uploaded</th><th></th></tr></thead><tbody>${
+      offers.map(o=>`<tr>
+        <td><img src="${API_BASE_URL}${esc(o.imagePath)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);"></td>
+        <td>${esc(o.title)}</td>
+        <td>${o.active ? '<span class="pill green">ON — showing to visitors</span>' : '<span class="pill amber">OFF</span>'}</td>
+        <td>${fmtDate(o.createdAt)}</td>
+        <td>
+          <button class="btn small ${o.active ? "ghost" : ""}" data-of-toggle="${esc(o.id)}" data-of-next="${o.active ? "off" : "on"}">${o.active ? "Turn OFF" : "Turn ON"}</button>
+          <button class="btn small coral" data-of-del="${esc(o.id)}">Delete</button>
+        </td>
+      </tr>`).join("")
+    }</tbody></table>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+
+async function addOffer(){
+  const msg = document.getElementById("ofMsg");
+  const btn = document.getElementById("ofSubmitBtn");
+  const title = document.getElementById("ofTitle").value.trim();
+  const file = document.getElementById("ofImage").files[0];
+  msg.style.color = "var(--coral-deep)"; msg.textContent = "";
+  if(!title){ msg.textContent = "Please enter a title."; return; }
+  if(!file){ msg.textContent = "Please choose an image."; return; }
+  if(file.size > 3*1024*1024){ msg.textContent = "Image is too large (max 3 MB)."; return; }
+  const fd = new FormData();
+  fd.append("title", title);
+  fd.append("active", document.getElementById("ofActive").checked ? "true" : "false");
+  fd.append("image", file);
+  btn.disabled = true; btn.textContent = "Uploading…";
+  try{
+    // multipart: do NOT set Content-Type (the browser adds the boundary); admin key goes in the header
+    const res = await fetch(`${API_BASE_URL}/api/offers/admin`, {
+      method: "POST",
+      headers: { "x-admin-key": session.adminKey || "" },
+      body: fd,
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || "Upload failed.");
+    msg.style.color = "var(--teal-deep)"; msg.textContent = "Offer uploaded.";
+    showToast("Offer uploaded");
+    document.getElementById("ofTitle").value = "";
+    document.getElementById("ofImage").value = "";
+    document.getElementById("ofPreview").style.display = "none";
+    loadOffers();
+  }catch(err){ msg.style.color = "var(--coral-deep)"; msg.textContent = err.message; }
+  finally{ btn.disabled = false; btn.textContent = "Upload offer"; }
+}
+
+document.getElementById("ofList").addEventListener("click", async (e)=>{
+  const t = e.target.closest("[data-of-toggle]");
+  const d = e.target.closest("[data-of-del]");
+  try{
+    if(t){
+      await apiSendAdmin(`/api/offers/admin/${t.dataset.ofToggle}`, "PATCH", { active: t.dataset.ofNext === "on" });
+      showToast(t.dataset.ofNext === "on" ? "Offer is now ON" : "Offer turned OFF");
+      loadOffers();
+    } else if(d){
+      if(!confirm("Delete this offer permanently?")) return;
+      await apiSendAdmin(`/api/offers/admin/${d.dataset.ofDel}`, "DELETE");
+      showToast("Offer deleted");
+      loadOffers();
+    }
+  }catch(err){ showToast(err.message); }
+});
+
+/* ---------- TAXI FARES ---------- */
+let taxiRoutes = [];
+let taxiEditId = null;
+
+function fmtRupee(n){ return n > 0 ? "₹" + Number(n).toLocaleString("en-IN") : "—"; }
+
+async function loadTaxi(){
+  const el = document.getElementById("txList");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const data = await apiGetAdmin("/api/taxi/admin/all");
+    taxiRoutes = data.routes || [];
+    if(!taxiRoutes.length){ el.innerHTML = '<div class="empty">No routes yet. Add your first one above.</div>'; return; }
+    el.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th>Route</th><th>KM</th><th>Sedan</th><th>Ertiga</th><th>Innova</th><th>Tempo</th><th>Status</th><th></th></tr></thead><tbody>${
+      taxiRoutes.map(r=>`<tr>
+        <td><b>${esc(r.from)}</b> → <b>${esc(r.to)}</b>${r.bothWays ? ' <span class="muted">(both ways)</span>' : ''}</td>
+        <td>${r.distanceKm ? esc(r.distanceKm) : "—"}</td>
+        <td>${fmtRupee(r.prices.sedan)}</td><td>${fmtRupee(r.prices.ertiga)}</td><td>${fmtRupee(r.prices.innova)}</td><td>${fmtRupee(r.prices.tempo)}</td>
+        <td>${r.active ? '<span class="pill green">Showing</span>' : '<span class="pill amber">Hidden</span>'}</td>
+        <td><div class="row-actions">
+          <button class="btn small" data-tx-edit="${esc(r.id)}">Edit</button>
+          <button class="btn small ghost" data-tx-toggle="${esc(r.id)}" data-tx-next="${r.active ? "off" : "on"}">${r.active ? "Hide" : "Show"}</button>
+          <button class="btn small coral" data-tx-del="${esc(r.id)}">Delete</button>
+        </div></td>
+      </tr>`).join("")
+    }</tbody></table></div>`;
+  }catch(err){ el.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+
+function resetTaxiForm(){
+  taxiEditId = null;
+  ["txFrom","txTo","txKm","txSedan","txErtiga","txInnova","txTempo"].forEach(id=>{ document.getElementById(id).value = ""; });
+  document.getElementById("txBoth").checked = true;
+  document.getElementById("txActive").checked = true;
+  document.getElementById("txFormTitle").textContent = "Add a taxi route";
+  document.getElementById("txSaveBtn").textContent = "Add route";
+  document.getElementById("txCancelBtn").style.display = "none";
+}
+
+function startTaxiEdit(id){
+  const r = taxiRoutes.find(x=>x.id === id);
+  if(!r) return;
+  taxiEditId = id;
+  document.getElementById("txFrom").value = r.from;
+  document.getElementById("txTo").value = r.to;
+  document.getElementById("txKm").value = r.distanceKm || "";
+  document.getElementById("txSedan").value = r.prices.sedan || "";
+  document.getElementById("txErtiga").value = r.prices.ertiga || "";
+  document.getElementById("txInnova").value = r.prices.innova || "";
+  document.getElementById("txTempo").value = r.prices.tempo || "";
+  document.getElementById("txBoth").checked = !!r.bothWays;
+  document.getElementById("txActive").checked = !!r.active;
+  document.getElementById("txFormTitle").textContent = `Edit route: ${r.from} → ${r.to}`;
+  document.getElementById("txSaveBtn").textContent = "Save changes";
+  document.getElementById("txCancelBtn").style.display = "";
+  document.getElementById("txFrom").scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+async function saveTaxiRoute(){
+  const msg = document.getElementById("txMsg");
+  const btn = document.getElementById("txSaveBtn");
+  msg.style.color = "var(--coral-deep)"; msg.textContent = "";
+  const body = {
+    from: document.getElementById("txFrom").value.trim(),
+    to: document.getElementById("txTo").value.trim(),
+    distanceKm: document.getElementById("txKm").value.trim(),
+    sedan: document.getElementById("txSedan").value.trim(),
+    ertiga: document.getElementById("txErtiga").value.trim(),
+    innova: document.getElementById("txInnova").value.trim(),
+    tempo: document.getElementById("txTempo").value.trim(),
+    bothWays: document.getElementById("txBoth").checked,
+    active: document.getElementById("txActive").checked,
+  };
+  if(!body.from || !body.to){ msg.textContent = "Please enter both From and To city."; return; }
+  btn.disabled = true;
+  try{
+    if(taxiEditId) await apiSendAdmin(`/api/taxi/admin/${taxiEditId}`, "PUT", body);
+    else await apiSendAdmin("/api/taxi/admin", "POST", body);
+    showToast(taxiEditId ? "Route updated" : "Route added");
+    resetTaxiForm();
+    loadTaxi();
+  }catch(err){ msg.textContent = err.message; }
+  finally{ btn.disabled = false; }
+}
+
+async function bulkTaxi(){
+  const msg = document.getElementById("txBulkMsg");
+  const btn = document.getElementById("txBulkBtn");
+  const lines = document.getElementById("txBulk").value;
+  msg.style.color = "var(--coral-deep)"; msg.textContent = "";
+  if(!lines.trim()){ msg.textContent = "Paste at least one line."; return; }
+  btn.disabled = true;
+  try{
+    const data = await apiSendAdmin("/api/taxi/admin/bulk", "POST", { lines });
+    const skipped = (data.skipped || []);
+    msg.style.color = skipped.length ? "var(--coral-deep)" : "var(--teal-deep)";
+    msg.textContent = `Added ${data.added}, updated ${data.updated}.` + (skipped.length ? ` Skipped: ${skipped.join(" | ")}` : "");
+    if(data.added || data.updated){ document.getElementById("txBulk").value = ""; showToast("Routes imported"); loadTaxi(); }
+  }catch(err){ msg.textContent = err.message; }
+  finally{ btn.disabled = false; }
+}
+
+document.getElementById("txList").addEventListener("click", async (e)=>{
+  const ed = e.target.closest("[data-tx-edit]");
+  const tg = e.target.closest("[data-tx-toggle]");
+  const dl = e.target.closest("[data-tx-del]");
+  try{
+    if(ed){ startTaxiEdit(ed.dataset.txEdit); }
+    else if(tg){
+      await apiSendAdmin(`/api/taxi/admin/${tg.dataset.txToggle}`, "PUT", { active: tg.dataset.txNext === "on" });
+      showToast(tg.dataset.txNext === "on" ? "Route is now showing" : "Route hidden");
+      loadTaxi();
+    } else if(dl){
+      if(!confirm("Delete this route permanently?")) return;
+      await apiSendAdmin(`/api/taxi/admin/${dl.dataset.txDel}`, "DELETE");
+      showToast("Route deleted");
+      if(taxiEditId === dl.dataset.txDel) resetTaxiForm();
+      loadTaxi();
+    }
+  }catch(err){ showToast(err.message); }
+});
+
+/* ---------- boot ---------- */
+tryRestoreSession();
+</script>
+</body>
+</html>

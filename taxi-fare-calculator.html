@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============ GOOGLE ANALYTICS (GA4) — same stream as index.html ============ -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2WT1V9B7Y7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-2WT1V9B7Y7');
+</script>
+
+<!-- ============ PRIMARY SEO ============
+     Title / description / canonical / FAQ + Service schema are updated by the
+     script at the bottom for every route (e.g. /taxi-fare/haldwani-to-nainital),
+     so each route gets its own unique, crawlable page. -->
+<title id="pageTitleTag">Taxi Service Fare Calculator — Outstation Cab Fare | AdmireDworld Travel</title>
+<meta id="metaDescriptionTag" name="description" content="Get an instant outstation taxi fare estimate. Check Sedan, Ertiga, Innova and Tempo Traveller prices between cities with AdmireDworld Travel. Transparent pricing, no hidden charges.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="AdmireDworld Travel">
+<link id="canonicalTag" rel="canonical" href="https://www.tourpackagewala.in/taxi-fare-calculator">
+<meta name="theme-color" content="#2B3968">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AdmireDworld Travel">
+<meta id="ogTitleTag" property="og:title" content="Taxi Service Fare Calculator — Outstation Cab Fare | AdmireDworld Travel">
+<meta id="ogDescTag" property="og:description" content="Instant outstation taxi fare estimate — Sedan, Ertiga, Innova and Tempo Traveller. Transparent pricing, no hidden charges.">
+<meta id="ogUrlTag" property="og:url" content="https://www.tourpackagewala.in/taxi-fare-calculator">
+<meta property="og:image" content="https://www.tourpackagewala.in/og-image.jpg">
+<meta property="og:locale" content="en_IN">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Filled in by the script below with this route's own Service + FAQPage schema. -->
+<script type="application/ld+json" id="taxiSchemaTag">null</script>
+<script type="application/ld+json" id="taxiFaqSchemaTag">null</script>
+
+<style>
+:root{
+  --navy:#2B3968; --navy-deep:#1A2340; --teal:#3D5FA8; --teal-deep:#2C4680;
+  --amber:#E3A23E; --amber-deep:#C98620; --coral:#D14B3D;
+  --sand:#E7EAF1; --sand-soft:#F2F3F6; --ink:#1D2433; --ink-soft:#5B6472;
+  --cloud:#FFFFFF; --line:#E2E5EB; --wa:#25D366; --wa-deep:#1DA851;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --radius-m:10px; --radius-l:16px;
+  --shadow-card:0 1px 2px rgba(16,24,40,0.04), 0 8px 28px rgba(16,24,40,0.10);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--cloud);line-height:1.6;min-height:100vh;display:flex;flex-direction:column;}
+a{color:var(--teal);}
+h1,h2,h3{color:var(--navy);margin:0;line-height:1.2;}
+
+/* top bar (same look as policies.html) */
+.top-bar{background:var(--navy);padding:14px 24px;}
+.top-bar-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.brand{color:#fff;font-weight:700;font-size:18px;text-decoration:none;}
+.brand em{font-style:normal;color:var(--amber);}
+.back-link{color:#dbe2f0;font-size:13.5px;text-decoration:none;}
+.back-link:hover{color:#fff;}
+
+/* hero banner */
+.hero{background:linear-gradient(180deg,#c3d4f7 0%,#b9cdf5 100%);padding:44px 24px 110px;position:relative;overflow:hidden;}
+.hero::before{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.55) 2px,transparent 2.5px);background-size:26px 26px;
+  -webkit-mask-image:linear-gradient(90deg,#000 0%,transparent 28%,transparent 72%,#000 100%);
+  mask-image:linear-gradient(90deg,#000 0%,transparent 28%,transparent 72%,#000 100%);opacity:.7;}
+.hero-inner{max-width:1000px;margin:0 auto;position:relative;}
+.hero h1{font-size:clamp(28px,5vw,46px);font-weight:800;letter-spacing:-.5px;color:var(--navy-deep);}
+.hero p{margin:10px 0 0;color:#fff;font-size:clamp(14px,2vw,17px);font-weight:500;text-shadow:0 1px 3px rgba(26,35,64,.35);}
+
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 70px;width:100%;flex:1;}
+
+/* calculator card */
+.calc-card{background:var(--cloud);border-radius:var(--radius-l);box-shadow:var(--shadow-card);padding:28px 32px 26px;margin-top:-72px;position:relative;}
+.calc-card h2{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.calc-card h2 svg{width:38px;height:38px;flex-shrink:0;}
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.f-field label{display:block;font-size:16px;font-weight:500;color:var(--ink);margin-bottom:8px;}
+.f-field select{width:100%;appearance:none;-webkit-appearance:none;background:#fff
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1.5l6 6 6-6' fill='none' stroke='%231D2433' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+  no-repeat right 18px center;
+  border:1px solid #cfd5df;border-radius:10px;padding:14px 44px 14px 16px;font:inherit;font-size:17px;color:var(--ink);cursor:pointer;}
+.f-field select:focus{outline:2px solid var(--teal);outline-offset:1px;}
+.calc-actions{display:flex;justify-content:flex-end;margin-top:20px;}
+.btn-calc{display:inline-flex;align-items:center;gap:10px;background:var(--teal-deep);color:#fff;border:0;border-radius:8px;
+  padding:13px 24px;font:inherit;font-size:16px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s;}
+.btn-calc:hover{background:var(--navy);}
+.btn-calc:active{transform:translateY(1px);}
+.btn-calc svg{width:20px;height:20px;}
+
+/* pricing details */
+.pricing{margin-top:34px;padding:0 6px;}
+.pricing h2{font-size:26px;font-weight:700;margin-bottom:14px;}
+.route-line{font-size:15px;color:var(--ink-soft);margin:-6px 0 14px;}
+.table-wrap{overflow-x:auto;border:1px solid #b9c7e6;border-radius:4px;}
+table.fare{width:100%;border-collapse:collapse;min-width:640px;font-size:17px;}
+table.fare th{background:#bcd0f4;color:var(--navy-deep);font-weight:700;font-size:16px;text-align:center;padding:14px 10px;border:1px solid #a9bde3;}
+table.fare td{background:#e7effc;text-align:center;padding:20px 10px;border:1px solid #b9c7e6;font-weight:700;color:var(--navy-deep);font-size:20px;}
+table.fare td.route{text-align:left;font-weight:500;font-size:19px;padding-left:16px;}
+table.fare td.dist{font-weight:500;color:var(--ink-soft);}
+table.fare td.na{font-size:15px;color:var(--ink-soft);font-weight:600;}
+.fare-notes{list-style:none;margin:14px 0 0;padding:0;font-size:14px;color:var(--ink);display:flex;flex-direction:column;gap:2px;}
+.fare-notes li{display:flex;gap:6px;align-items:flex-start;}
+.fare-notes .ic{flex-shrink:0;width:16px;height:16px;margin-top:3px;color:var(--ink-soft);}
+
+/* WhatsApp CTA (just under the fare) */
+.wa-box{margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  background:#f1fbf5;border:1px solid #cdeedb;border-radius:var(--radius-m);padding:16px 20px;}
+.wa-box p{margin:0;font-size:15px;color:var(--ink);font-weight:500;}
+.wa-box p small{display:block;color:var(--ink-soft);font-weight:400;font-size:13px;}
+.btn-wa{display:inline-flex;align-items:center;justify-content:center;gap:9px;background:var(--wa);color:#fff;font-weight:700;font-size:16px;
+  padding:13px 24px;border-radius:99px;text-decoration:none;transition:background .2s,transform .15s;white-space:nowrap;}
+.btn-wa:hover{background:var(--wa-deep);color:#fff;transform:translateY(-1px);}
+.btn-wa svg{width:22px;height:22px;fill:#fff;flex-shrink:0;}
+
+.state-msg{padding:26px;text-align:center;color:var(--ink-soft);background:var(--sand-soft);border-radius:var(--radius-m);}
+.state-msg.err{color:var(--coral);}
+
+/* SEO content blocks */
+.seo-block{margin-top:44px;}
+.seo-block h2{font-size:22px;font-weight:700;margin-bottom:12px;}
+.faq-item{border-bottom:1px solid var(--line);padding:14px 0;}
+.faq-item h3{font-size:16px;font-weight:600;margin-bottom:6px;}
+.faq-item p{margin:0;font-size:15px;color:var(--ink-soft);}
+.route-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:6px;}
+.route-links a{display:flex;justify-content:space-between;gap:10px;background:var(--sand-soft);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;text-decoration:none;color:var(--navy);font-weight:600;font-size:14.5px;}
+.route-links a:hover{background:var(--sand);}
+.route-links a span{color:var(--ink-soft);font-weight:500;white-space:nowrap;}
+
+footer.site-foot{background:var(--sand-soft);border-top:1px solid var(--line);padding:22px 24px;font-size:13.5px;color:var(--ink-soft);}
+.foot-inner{max-width:1000px;margin:0 auto;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.foot-inner a{color:var(--ink-soft);text-decoration:none;margin-left:18px;}
+.foot-inner a:first-child{margin-left:0;}
+.foot-inner a:hover{color:var(--navy);}
+
+@media (max-width:640px){
+  .hero{padding:32px 18px 100px;}
+  .calc-card{padding:22px 18px;margin-top:-64px;}
+  .calc-grid{grid-template-columns:1fr;gap:14px;}
+  .btn-calc{width:100%;justify-content:center;}
+  .wrap{padding:0 14px 60px;}
+  .wa-box{flex-direction:column;align-items:stretch;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-inner">
+    <a class="brand" href="/">AdmireD<em>world</em> Travel</a>
+    <a class="back-link" href="/">&larr; Back to site</a>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Taxi Service — Fare Calculator</h1>
+    <p>Get instant fare estimate for your journey. Transparent pricing, no hidden charges.</p>
+  </div>
+</section>
+
+<main class="wrap">
+
+  <section class="calc-card" aria-labelledby="calcHeading">
+    <h2 id="calcHeading">
+      <svg viewBox="0 0 64 64" fill="#1A2340" aria-hidden="true"><path d="M24 6h16v6h-4v2h4a8 8 0 0 1 7.6 5.5l2 6.2A8 8 0 0 1 58 33v13h-5v6a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-6H21v6a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-6H6V33a8 8 0 0 1 6.4-7.8l2-6.2A8 8 0 0 1 22 14h4v-2h-2V6Zm-2 14a3 3 0 0 0-2.9 2.1L17.4 27h29.2l-1.7-4.9A3 3 0 0 0 42 20H22ZM15 38a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm34 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+      Calculate Your Fare
+    </h2>
+    <div class="calc-grid">
+      <div class="f-field">
+        <label for="fromCity">From City</label>
+        <select id="fromCity" aria-label="From city"><option>Loading…</option></select>
+      </div>
+      <div class="f-field">
+        <label for="toCity">To City</label>
+        <select id="toCity" aria-label="To city"><option>Loading…</option></select>
+      </div>
+    </div>
+    <div class="calc-actions">
+      <button type="button" class="btn-calc" id="calcBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Calculate Fare
+      </button>
+    </div>
+  </section>
+
+  <section class="pricing" aria-labelledby="pricingHeading" aria-live="polite">
+    <h2 id="pricingHeading">Pricing Details</h2>
+    <p class="route-line" id="routeLine"></p>
+    <div id="fareArea">
+      <!-- Crawler-visible fallback (replaced as soon as live fares load from the backend). -->
+      <div class="table-wrap">
+        <table class="fare">
+          <thead><tr><th>Route</th><th>Distance</th><th>Sedan Price</th><th>Ertiga Price</th><th>Innova Price</th><th>Tempo Traveller Price</th></tr></thead>
+          <tbody><tr><td class="route">Haldwani to Nainital</td><td class="dist">35 KM</td><td>₹1500</td><td>₹2000</td><td>₹2500</td><td>₹4000</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <ul class="fare-notes" id="fareNotes">
+      <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg><span>All prices are inclusive of driver allowance, fuel &amp; tolls. Extra night charges ₹300/night may apply.</span></li>
+      <li><svg class="ic" style="visibility:hidden" viewBox="0 0 24 24"></svg><span>Pricing is approximate and may vary based on demand &amp; time.</span></li>
+    </ul>
+
+    <!-- WhatsApp button, right below the fare -->
+    <div class="wa-box" id="waBox">
+      <p>Want to book this taxi? <small>Chat with us on WhatsApp for the final quote &amp; availability.</small></p>
+      <a class="btn-wa" id="waBtn" href="https://wa.me/919639343585" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.1-1.6-.8-1.9-.9-.2-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.4.1-.6.1-.1.3-.3.4-.5.1-.1.2-.3.2-.4.1-.2 0-.3 0-.5-.1-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2s.9 2.5 1.1 2.7c.1.2 1.9 2.9 4.6 4 .6.3 1.1.4 1.5.6.6.2 1.2.2 1.6.1.5-.1 1.6-.6 1.8-1.3.2-.6.2-1.1.2-1.2-.1-.2-.2-.2-.5-.3z"/><path d="M12 2C6.5 2 2 6.5 2 12c0 1.9.5 3.6 1.4 5.2L2 22l4.9-1.3C8.4 21.5 10.1 22 12 22c5.5 0 10-4.5 10-10S17.5 2 12 2zm0 18.2c-1.7 0-3.3-.5-4.6-1.3l-.3-.2-3 .8.8-2.9-.2-.3C3.9 15 3.3 13.5 3.3 12c0-4.8 3.9-8.7 8.7-8.7s8.7 3.9 8.7 8.7-3.9 8.7-8.7 8.7z"/></svg>
+        Book on WhatsApp
+      </a>
+    </div>
+  </section>
+
+  <section class="seo-block" id="faqBlock" hidden aria-labelledby="faqHeading">
+    <h2 id="faqHeading">Taxi fare FAQs</h2>
+    <div id="faqList"></div>
+  </section>
+
+  <section class="seo-block" id="allRoutesBlock" hidden aria-labelledby="allRoutesHeading">
+    <h2 id="allRoutesHeading">All taxi routes &amp; fares</h2>
+    <div class="route-links" id="allRoutes"></div>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="foot-inner">
+    <div>© 2026 AdmireDworld Travel. All rights reserved.</div>
+    <div><a href="/policies.html#terms">Terms &amp; conditions</a><a href="/policies.html#cancellation">Cancellation policy</a><a href="/">Home</a></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var API_BASE_URL = "https://tourpackagewala-backend.onrender.com"; // same backend as script.js / admin.html
+  var SITE = "https://www.tourpackagewala.in";
+  var BASE_PATH = "/taxi-fare-calculator";
+  var ROUTE_PREFIX = "/taxi-fare/";
+  var WHATSAPP_NUMBER = "919639343585"; // overridden by Admin → Settings (GET /api/settings)
+
+  var VEHICLES = [
+    { key: "sedan",  label: "Sedan" },
+    { key: "ertiga", label: "Ertiga" },
+    { key: "innova", label: "Innova" },
+    { key: "tempo",  label: "Tempo Traveller" }
+  ];
+
+  var routes = [];
+  var notes = [];
+  var graph = {};          // "haldwani" -> { name, to: { "nainital": { name, route } } }
+  var fromSel = document.getElementById("fromCity");
+  var toSel = document.getElementById("toCity");
+  var fareArea = document.getElementById("fareArea");
+  var routeLine = document.getElementById("routeLine");
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function money(n){ return "₹" + Number(n).toLocaleString("en-IN"); }
+  function key(s){ return String(s||"").trim().toLowerCase(); }
+  function slugify(s){
+    return String(s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60) || "city";
+  }
+  function track(name, params){ try{ if(window.gtag) gtag("event", name, params || {}); }catch(e){} }
+
+  /* ---------- build city graph from routes ---------- */
+  function buildGraph(){
+    graph = {};
+    function link(a, b, route){
+      var ka = key(a);
+      if(!graph[ka]) graph[ka] = { name: a, to: {} };
+      var kb = key(b);
+      // a direct (exact-direction) route always wins over a reverse one
+      if(!graph[ka].to[kb] || route.from === a) graph[ka].to[kb] = { name: b, route: route, reversed: route.from !== a };
+    }
+    routes.forEach(function(r){
+      link(r.from, r.to, r);
+      if(r.bothWays) link(r.to, r.from, r);
+    });
+  }
+  function sortedNames(map){
+    return Object.keys(map).map(function(k){ return map[k].name; }).sort(function(a,b){ return a.localeCompare(b); });
+  }
+
+  /* ---------- dropdowns ---------- */
+  function fillFrom(selected){
+    var names = sortedNames(graph);
+    fromSel.innerHTML = names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
+    if(selected && graph[key(selected)]) fromSel.value = graph[key(selected)].name;
+  }
+  function fillTo(selected){
+    var node = graph[key(fromSel.value)];
+    var names = node ? sortedNames(node.to) : [];
+    toSel.innerHTML = names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
+    if(selected && node && node.to[key(selected)]) toSel.value = node.to[key(selected)].name;
+  }
+
+  /* ---------- fare table ---------- */
+  function cell(v){ return v > 0 ? '<td>'+money(v)+'</td>' : '<td class="na">On request</td>'; }
+  function fareTableHTML(label, route){
+    var p = route.prices;
+    return '<div class="table-wrap"><table class="fare"><thead><tr>'
+      + '<th>Route</th><th>Distance</th>'
+      + VEHICLES.map(function(v){ return '<th>'+esc(v.label)+' Price</th>'; }).join("")
+      + '</tr></thead><tbody><tr>'
+      + '<td class="route">'+esc(label)+'</td>'
+      + '<td class="dist">'+(route.distanceKm > 0 ? esc(route.distanceKm)+' KM' : '—')+'</td>'
+      + VEHICLES.map(function(v){ return cell(p[v.key]); }).join("")
+      + '</tr></tbody></table></div>';
+  }
+
+  /* ---------- WhatsApp link ---------- */
+  function setWhatsApp(from, to, route){
+    var lines = ["Hi AdmireDworld Travel! I'd like to book a taxi from " + from + " to " + to + "."];
+    if(route){
+      var p = route.prices, parts = [];
+      VEHICLES.forEach(function(v){ if(p[v.key] > 0) parts.push(v.label + " " + money(p[v.key])); });
+      if(parts.length) lines.push("Fare shown on website: " + parts.join(", ") + ".");
+    }
+    lines.push("Please confirm availability.");
+    document.getElementById("waBtn").href = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(lines.join(" "));
+  }
+
+  /* ---------- SEO: title / meta / canonical / schema / FAQ ---------- */
+  function setMeta(id, attr, val){ var el = document.getElementById(id); if(el) el.setAttribute(attr, val); }
+  function updateSEO(from, to, route){
+    var url, title, desc;
+    if(route){
+      var p = route.prices;
+      var prices = VEHICLES.filter(function(v){ return p[v.key] > 0; })
+        .map(function(v){ return v.label + " " + money(p[v.key]); }).join(", ");
+      url = SITE + ROUTE_PREFIX + slugify(from) + "-to-" + slugify(to);
+      title = from + " to " + to + " Taxi Fare" + (route.distanceKm > 0 ? " (" + route.distanceKm + " KM)" : "") + " — Cab Booking | AdmireDworld Travel";
+      desc = from + " to " + to + " taxi fare" + (prices ? ": " + prices : "") + ". Prices include driver allowance, fuel & tolls. Book your outstation cab with AdmireDworld Travel.";
+    } else {
+      url = SITE + BASE_PATH;
+      title = "Taxi Service Fare Calculator — Outstation Cab Fare | AdmireDworld Travel";
+      desc = "Get an instant outstation taxi fare estimate. Check Sedan, Ertiga, Innova and Tempo Traveller prices between cities with AdmireDworld Travel. Transparent pricing, no hidden charges.";
+    }
+    document.title = title;
+    setMeta("metaDescriptionTag", "content", desc);
+    setMeta("canonicalTag", "href", url);
+    setMeta("ogTitleTag", "content", title);
+    setMeta("ogDescTag", "content", desc);
+    setMeta("ogUrlTag", "content", url);
+
+    var schemaEl = document.getElementById("taxiSchemaTag");
+    var faqEl = document.getElementById("taxiFaqSchemaTag");
+    var faqBlock = document.getElementById("faqBlock");
+    if(!route){ schemaEl.textContent = "null"; faqEl.textContent = "null"; faqBlock.hidden = true; return; }
+
+    var p2 = route.prices;
+    schemaEl.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "TaxiService",
+      "name": from + " to " + to + " Taxi Service",
+      "description": desc,
+      "url": url,
+      "areaServed": [{ "@type": "City", "name": from }, { "@type": "City", "name": to }],
+      "provider": { "@type": "TravelAgency", "name": "AdmireDworld Travel", "url": SITE + "/" },
+      "offers": VEHICLES.filter(function(v){ return p2[v.key] > 0; }).map(function(v){
+        return { "@type": "Offer", "name": v.label + " — " + from + " to " + to, "price": String(p2[v.key]), "priceCurrency": "INR", "url": url };
+      })
+    });
+
+    var faqs = [];
+    var priceList = VEHICLES.filter(function(v){ return p2[v.key] > 0; })
+      .map(function(v){ return v.label + " " + money(p2[v.key]); }).join(", ");
+    faqs.push({ q: "What is the taxi fare from " + from + " to " + to + "?",
+      a: priceList ? "The taxi fare from " + from + " to " + to + " is: " + priceList + ". Final price may vary with demand and timing." : "Please contact us on WhatsApp for the current taxi fare from " + from + " to " + to + "." });
+    if(route.distanceKm > 0){
+      faqs.push({ q: "What is the distance between " + from + " and " + to + "?",
+        a: "The distance between " + from + " and " + to + " is approximately " + route.distanceKm + " KM." });
+    }
+    faqs.push({ q: "Are fuel, tolls and driver allowance included in the " + from + " to " + to + " taxi fare?",
+      a: "Yes — prices are inclusive of driver allowance, fuel and tolls. Extra night charges of ₹300 per night may apply." });
+    faqs.push({ q: "Which cars are available for " + from + " to " + to + "?",
+      a: "We offer Sedan, Ertiga, Innova and Tempo Traveller for this route. Chat with us on WhatsApp to confirm availability for your date." });
+
+    document.getElementById("faqList").innerHTML = faqs.map(function(f){
+      return '<div class="faq-item"><h3>'+esc(f.q)+'</h3><p>'+esc(f.a)+'</p></div>';
+    }).join("");
+    faqBlock.hidden = false;
+    faqEl.textContent = JSON.stringify({
+      "@context": "https://schema.org", "@type": "FAQPage",
+      "mainEntity": faqs.map(function(f){ return { "@type": "Question", "name": f.q, "acceptedAnswer": { "@type": "Answer", "text": f.a } }; })
+    });
+  }
+
+  /* ---------- URL handling ---------- */
+  var cleanMode = location.pathname.indexOf("/taxi-fare") === 0;
+  function updateURL(from, to){
+    try{
+      if(cleanMode){
+        history.replaceState(null, "", ROUTE_PREFIX + slugify(from) + "-to-" + slugify(to));
+      } else {
+        history.replaceState(null, "", "?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to));
+      }
+    }catch(e){}
+  }
+  function readInitial(){
+    // /taxi-fare/haldwani-to-nainital  → match by slug (works for both directions)
+    var m = /^\/taxi-fare\/([a-z0-9-]+)\/?$/.exec(location.pathname);
+    if(m){
+      for(var i = 0; i < routes.length; i++){
+        var r = routes[i];
+        if(slugify(r.from) + "-to-" + slugify(r.to) === m[1]) return { from: r.from, to: r.to };
+        if(r.bothWays && slugify(r.to) + "-to-" + slugify(r.from) === m[1]) return { from: r.to, to: r.from };
+      }
+    }
+    var q = new URLSearchParams(location.search);
+    if(q.get("from") && q.get("to")) return { from: q.get("from"), to: q.get("to") };
+    return null;
+  }
+
+  /* ---------- calculate ---------- */
+  function calculate(opts){
+    opts = opts || {};
+    var node = graph[key(fromSel.value)];
+    var hit = node && node.to[key(toSel.value)];
+    if(!hit){
+      fareArea.innerHTML = '<div class="state-msg">No fare found for this route yet. Please contact us on WhatsApp for a quote.</div>';
+      routeLine.textContent = "";
+      setWhatsApp(fromSel.value, toSel.value, null);
+      updateSEO(fromSel.value, toSel.value, null);
+      return;
+    }
+    var from = node.name, to = hit.name;
+    fareArea.innerHTML = fareTableHTML(from + " to " + to, hit.route);
+    routeLine.textContent = "Taxi fare from " + from + " to " + to;
+    setWhatsApp(from, to, hit.route);
+    updateSEO(from, to, hit.route);
+    if(!opts.silent){ updateURL(from, to); track("taxi_fare_calculated", { from: from, to: to }); }
+  }
+
+  function renderNotes(){
+    if(!notes.length) return;
+    var ul = document.getElementById("fareNotes");
+    ul.innerHTML = notes.map(function(n, i){
+      var icon = i === 0
+        ? '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>'
+        : '<svg class="ic" style="visibility:hidden" viewBox="0 0 24 24"></svg>';
+      return '<li>'+icon+'<span>'+esc(n)+'</span></li>';
+    }).join("");
+  }
+
+  function renderAllRoutes(){
+    var box = document.getElementById("allRoutes");
+    var list = routes.slice().sort(function(a,b){ return a.from.localeCompare(b.from) || a.to.localeCompare(b.to); });
+    box.innerHTML = list.map(function(r){
+      var href = ROUTE_PREFIX + slugify(r.from) + "-to-" + slugify(r.to);
+      var from = r.prices.sedan > 0 ? "from " + money(r.prices.sedan) : "";
+      return '<a href="'+esc(href)+'"><div>'+esc(r.from)+' to '+esc(r.to)+'</div><span>'+from+'</span></a>';
+    }).join("");
+    document.getElementById("allRoutesBlock").hidden = !list.length;
+  }
+
+  /* ---------- load ---------- */
+  function load(){
+    fetch(API_BASE_URL + "/api/settings").then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.settings && d.settings.whatsappNumber){
+        WHATSAPP_NUMBER = String(d.settings.whatsappNumber).replace(/[^0-9]/g, "") || WHATSAPP_NUMBER;
+        var node = graph[key(fromSel.value)];
+        var hit = node && node.to[key(toSel.value)];
+        setWhatsApp(fromSel.value, toSel.value, hit ? hit.route : null);
+      }
+    }).catch(function(){});
+
+    return fetch(API_BASE_URL + "/api/taxi/routes").then(function(r){
+      if(!r.ok) throw new Error("bad status");
+      return r.json();
+    }).then(function(data){
+      routes = (data && data.routes) || [];
+      notes = (data && data.notes) || [];
+      if(!routes.length){
+        fromSel.innerHTML = toSel.innerHTML = "<option>—</option>";
+        fareArea.innerHTML = '<div class="state-msg">Taxi fares are being updated. Please contact us on WhatsApp for a quote.</div>';
+        return;
+      }
+      buildGraph();
+      var init = readInitial() || { from: routes[0].from, to: routes[0].to }; // first route = default selection
+      fillFrom(init ? init.from : null);
+      fillTo(init ? init.to : null);
+      renderNotes();
+      renderAllRoutes();
+      calculate({ silent: true });
+    }).catch(function(){
+      // keep the pre-rendered fallback row visible, but tell the visitor fares may be stale
+      fromSel.innerHTML = toSel.innerHTML = "<option>—</option>";
+      fareArea.insertAdjacentHTML("beforeend", '<div class="state-msg err" style="margin-top:12px;">Could not load live fares right now. Please refresh in a moment or chat with us on WhatsApp.</div>');
+    });
+  }
+
+  fromSel.addEventListener("change", function(){ fillTo(null); calculate(); });
+  toSel.addEventListener("change", function(){ calculate(); });
+  document.getElementById("calcBtn").addEventListener("click", function(){ calculate(); });
+  document.getElementById("waBtn").addEventListener("click", function(){
+    track("whatsapp_click", { page: "taxi_fare_calculator", from: fromSel.value, to: toSel.value });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

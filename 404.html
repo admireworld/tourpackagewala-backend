@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Redirecting… | AdmireDworld Travel</title>
+<meta name="robots" content="noindex">
+<script>
+  // Only used on static hosts that can't be configured with a proper SPA
+  // rewrite rule (see _redirects / vercel.json for Netlify/Vercel, which
+  // are preferred over this file whenever the host supports them).
+  // Bounces a deep link like /package/india/kashmir-valley-escape--in1
+  // back to index.html with the real path preserved in "?p=", which
+  // script.js restores via history.replaceState on load.
+  var l = window.location;
+  var target = l.pathname + l.search + l.hash;
+  l.replace(l.origin + "/?p=" + encodeURIComponent(target));
+</script>
+</head>
+<body>
+  <p>Redirecting…</p>
+</body>
+</html>

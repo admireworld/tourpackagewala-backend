@@ -1,0 +1,4 @@
+/sitemap_index.xml   /sitemap.xml   301
+/taxi-fare-calculator   /taxi-fare-calculator.html   200
+/taxi-fare/*   /taxi-fare-calculator.html   200
+/*    /index.html   200
