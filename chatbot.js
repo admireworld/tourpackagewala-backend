@@ -285,6 +285,19 @@
         b.addEventListener("click", function () { if (!busy && step === "destination") handleDestination(d); });
         wrap.appendChild(b);
       });
+      var other = document.createElement("button");
+      other.type = "button";
+      other.className = "tpwcb-chip";
+      other.textContent = "Other ✏️";
+      other.addEventListener("click", function () {
+        if (busy || step !== "destination") return;
+        clearChips();
+        addMsg("Other", "user");
+        botSay("No problem! Please type the destination you have in mind.", 400).then(function () {
+          setInput("Type your destination name", "text", "text", 60);
+        });
+      });
+      wrap.appendChild(other);
       body.appendChild(wrap);
       scrollDown();
       setInput("Type destination e.g. Kashmir, Goa, Bali", "text", "text", 60);
