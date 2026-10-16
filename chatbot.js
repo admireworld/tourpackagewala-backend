@@ -273,7 +273,7 @@
 
   function askDestination(isRepeat) {
     step = "destination";
-    var p = botSay(isRepeat ? "Kaunsa naya destination dekhna chahenge? 🌍" : "Namaste! 👋 Main TourPackageWala ka trip assistant hu.\n\nAap kahan ghumne jaana chahte hain? Destination likhiye ya neeche se chuniye 👇");
+    var p = botSay(isRepeat ? "Which destination would you like to explore next? 🌍" : "Hello! 👋 I'm the TourPackageWala trip assistant.\n\nWhere would you like to travel? Type a destination or pick one below 👇");
     return p.then(function () {
       var wrap = document.createElement("div");
       wrap.className = "tpwcb-chips";
@@ -297,7 +297,7 @@
     if (saved && saved.name && saved.phone) {
       state.name = saved.name;
       state.phone = saved.phone;
-      botSay("Wapas swagat hai, " + saved.name + "! 😊", 300).then(function () { askDestination(true); });
+      botSay("Welcome back, " + saved.name + "! 😊", 300).then(function () { askDestination(true); });
     } else {
       askDestination(false);
     }
@@ -312,7 +312,7 @@
     setError("");
     if (state.name && state.phone) { saveLeadAndShow(); return; }
     step = "name";
-    botSay("Wah, " + dest + " ek shandaar choice hai! ✨\n\nAapka naam kya hai?").then(function () {
+    botSay("Great choice — " + dest + " is wonderful! ✨\n\nMay I have your name?").then(function () {
       setInput("Your name", "text", "text", 40);
     });
   }
@@ -324,7 +324,7 @@
     state.name = name;
     setError("");
     step = "phone";
-    botSay("Thanks " + name.split(" ")[0] + "! 🙏\nAapka contact number (10 digit) share kijiye — hamari team best price ke saath call karegi.").then(function () {
+    botSay("Thanks " + name.split(" ")[0] + "! 🙏\nPlease share your 10-digit contact number — our team will call you with the best price.").then(function () {
       setInput("10-digit mobile number", "tel", "numeric", 14);
     });
   }
@@ -396,7 +396,7 @@
       sendBtn.disabled = false;
       // Lead could not be saved — let the customer retry the number step.
       step = "phone";
-      addMsg("Sorry, kuch gadbad ho gayi: " + err.message + "\nPlease dobara try kijiye.", "bot");
+      addMsg("Sorry, something went wrong: " + err.message + "\nPlease try again.", "bot");
       setInput("10-digit mobile number", "tel", "numeric", 14);
       state.phone = "";
       ss(KEY_LEAD, null);
@@ -411,9 +411,9 @@
     step = "done";
 
     var line;
-    if (n > 0) line = "Shukriya " + first + "! ✅ Aapki details mil gayi hain.\n\n" + dest + " ke " + n + " package" + (n > 1 ? "s" : "") + " website par dikha diye hain 👉 Hamari team jaldi hi aapko call karegi.";
-    else if (n === 0) line = "Shukriya " + first + "! ✅ Aapki details mil gayi hain.\n\nAbhi " + dest + " ka ready package list mein nahi hai, par hamari team aapke liye custom package banakar call karegi.";
-    else line = "Shukriya " + first + "! ✅ Aapki details mil gayi hain. " + dest + " ke packages website par dikha diye hain. Hamari team jaldi call karegi.";
+    if (n > 0) line = "Thank you " + first + "! ✅ We've received your details.\n\nWe're showing " + n + " " + dest + " package" + (n > 1 ? "s" : "") + " on the website 👉 Our team will call you shortly.";
+    else if (n === 0) line = "Thank you " + first + "! ✅ We've received your details.\n\nWe don't have a ready-made " + dest + " package listed right now, but our team will create a custom package and call you.";
+    else line = "Thank you " + first + "! ✅ We've received your details. We're showing " + dest + " packages on the website. Our team will call you shortly.";
 
     botSay(line, 500).then(function () {
       var acts = document.createElement("div");
@@ -423,7 +423,7 @@
         var view = document.createElement("button");
         view.type = "button";
         view.className = "tpwcb-btn tpwcb-btn-pri";
-        view.textContent = "📦 " + dest + " packages dekhein";
+        view.textContent = "📦 View " + dest + " packages";
         view.addEventListener("click", function () { closePanel(); window.scrollTo({ top: 0, behavior: "smooth" }); });
         acts.appendChild(view);
       }
@@ -432,13 +432,13 @@
         var a = document.createElement("a");
         a.className = "tpwcb-btn tpwcb-btn-sec";
         a.href = wa; a.target = "_blank"; a.rel = "noopener";
-        a.textContent = "💬 WhatsApp par baat karein";
+        a.textContent = "💬 Chat on WhatsApp";
         acts.appendChild(a);
       }
       var again = document.createElement("button");
       again.type = "button";
       again.className = "tpwcb-btn tpwcb-btn-ter";
-      again.textContent = "🔍 Doosra destination dekhein";
+      again.textContent = "🔍 Explore another destination";
       again.addEventListener("click", function () {
         clearChips(); busy = false; sendBtn.disabled = false; askDestination(true);
       });

@@ -116,11 +116,21 @@
     if (!isHomePage()) return;
 
     var startedAt = Date.now();
+    // Speed-up: open the connection to the backend right away, and warm the
+    // browser cache with the last offer image this visitor saw.
+    try {
+      var pc = document.createElement("link");
+      pc.rel = "preconnect"; pc.href = API; pc.crossOrigin = "anonymous";
+      document.head.appendChild(pc);
+      var lastImg = localStorage.getItem("aw_offer_last_img");
+      if (lastImg) { var warm = new Image(); warm.src = API + lastImg; }
+    } catch (e) {}
     fetch(API + "/api/offers/active", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         var offer = data && data.offer;
         if (!offer || !offer.imagePath) return;
+        try { localStorage.setItem("aw_offer_last_img", offer.imagePath); } catch (e) {}
         if (SHOW_ONCE_PER_SESSION && !forced() && alreadySeen(offer)) return;
 
         // Preload the image so the popup never opens as an empty box.
