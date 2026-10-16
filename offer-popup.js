@@ -20,7 +20,7 @@
 (function () {
   "use strict";
 
-  var SHOW_DELAY_MS = 3000;
+  var SHOW_DELAY_MS = 0;
   var SHOW_ONCE_PER_SESSION = true;
   var FALLBACK_API = "https://tourpackagewala-backend.onrender.com";
 

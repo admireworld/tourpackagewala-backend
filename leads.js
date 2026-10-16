@@ -90,6 +90,7 @@ const VALID_SOURCES = new Set([
   "package_enquiry", // "Book Now" query form on a package's own detail page
   "customize_quote", // legacy Customize Package source
   "PACKAGE_DOWNLOAD", // Package Detail / Customize package PDF download
+  "chatbot", // Website chatbot (destination -> name -> phone), no login needed
   "other",
 ]);
 const VALID_STATUSES = new Set(["new", "contacted", "converted", "closed"]);
